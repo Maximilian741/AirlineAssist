@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Helena → Anywhere · Delta Companion Value Finder</title>
+  <meta name="theme-color" content="#1565c0" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Fairfare" />
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('dc-theme') || 'light'); } catch (e) {}</script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">✈</span>
+      <div>
+        <h1>Helena&nbsp;→&nbsp;Anywhere</h1>
+        <p class="sub">Where can your <strong>companion fly almost free?</strong> · <span id="origin-label">HLN</span></p>
+      </div>
+    </div>
+    <div class="source">
+      <span id="source-badge" class="badge">checking…</span>
+      <button id="theme-toggle" title="Switch light / dark">🌙</button>
+    </div>
+  </header>
+
+  <div id="info-banner" class="banner hidden">
+    <span id="info-banner-text"></span>
+    <a href="#" id="open-setup">precise fare-class mode</a>
+  </div>
+
+  <main class="layout">
+    <!-- ============ CONTROLS ============ -->
+    <section class="panel controls">
+      <div class="field">
+        <label>Which Delta card do you have?</label>
+        <select id="tier"></select>
+        <p class="hint" id="tier-zones"></p>
+        <p class="card-note">Have the Gold card? It doesn’t include a companion ticket — only Platinum and Reserve do.</p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-mode="explore">🌎 Everywhere</button>
+        <button class="tab" data-mode="single">Single trip</button>
+        <button class="tab" data-mode="scan">Pick &amp; compare</button>
+        <button class="tab" data-mode="rights">🛡️ Your Rights</button>
+        <button class="tab" data-mode="claim">💸 What am I owed?</button>
+      </div>
+
+      <!-- Everywhere: no destination needed -->
+      <div id="mode-explore" class="mode">
+        <div class="checkline">
+          <input type="checkbox" id="exp-flex" />
+          <label for="exp-flex">🪶 I’m flexible — find the cheapest week</label>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label id="exp-depart-label">Leave on</label>
+            <input type="date" id="exp-depart" />
+          </div>
+          <div class="field">
+            <label id="exp-return-label">Come back</label>
+            <input type="date" id="exp-return" />
+          </div>
+        </div>
+        <div class="field hidden" id="exp-nights-field">
+          <label>Trip length</label>
+          <select id="exp-nights">
+            <option value="3">A long weekend (3 nights)</option>
+            <option value="5">5 nights</option>
+            <option value="7" selected>A week (7 nights)</option>
+            <option value="10">10 nights</option>
+            <option value="14">Two weeks (14 nights)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>How far to look</label>
+          <div class="tabs scope">
+            <button class="scope-btn active" data-scope="popular">Popular spots</button>
+            <button class="scope-btn" data-scope="all">Everywhere</button>
+          </div>
+          <p class="hint">Checks Delta flights from Helena (all connect through Salt Lake City) and ranks where you can go. <b>Popular spots</b> is faster and more reliable; a big <b>Everywhere</b> scan can bump into Google’s free limit (you’ll get a clear note if it does).</p>
+        </div>
+        <button id="explore-btn" class="primary">🌎 Show me the deals</button>
+      </div>
+
+      <!-- Single trip -->
+      <div id="mode-single" class="mode hidden">
+        <div class="field">
+          <label>Destination</label>
+          <input id="destination" list="dest-list" placeholder="e.g. JFK, LAX, MCO" autocomplete="off" />
+          <datalist id="dest-list"></datalist>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Depart</label>
+            <input type="date" id="depart" />
+          </div>
+          <div class="field">
+            <label>Return</label>
+            <input type="date" id="return" />
+          </div>
+        </div>
+        <button id="search-btn" class="primary">Find companion value</button>
+      </div>
+
+      <!-- Value scan -->
+      <div id="mode-scan" class="mode hidden">
+        <div class="field">
+          <label>Destinations to compare</label>
+          <div id="scan-dests" class="chips"></div>
+          <p class="hint">Click to toggle. We’ll rank them by how much your companion cert saves.</p>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Depart</label>
+            <input type="date" id="scan-depart" />
+          </div>
+          <div class="field">
+            <label>Return</label>
+            <input type="date" id="scan-return" />
+          </div>
+        </div>
+        <button id="scan-btn" class="primary">Scan for best value</button>
+      </div>
+
+      <!-- Traveler rights & consumer tools (full content renders in the results panel) -->
+      <div id="mode-rights" class="mode hidden">
+        <div class="rights-intro">
+          <p><strong>Know your rights.</strong> Most travelers never claim what they’re owed, simply because the rules aren’t obvious. Every fact in this guide is checked against the actual government rules — and links to the source so you can verify it.</p>
+        </div>
+        <div class="rights-nav" id="rights-nav">
+          <button data-jump="rights-owed">💰 What they owe you</button>
+          <button data-jump="rights-getpaid">🪜 How to get paid</button>
+          <button data-jump="rights-intl">🌍 Europe / UK / Canada cash</button>
+          <button data-jump="rights-law">📜 The law (what’s real)</button>
+          <button data-jump="rights-record">📊 Check their record</button>
+          <button data-jump="rights-allies">🤝 Who's on your side</button>
+        </div>
+        <p class="hint" id="rights-verified"></p>
+      </div>
+
+      <!-- "What am I owed?" claim calculator (renders in the results panel) -->
+      <div id="mode-claim" class="mode hidden">
+        <div class="rights-intro">
+          <p><strong>Flight go wrong?</strong> Answer a few plain questions and get the exact amount the airline owes you, the rule that says so, and a ready-to-send demand letter — citing the law that makes them pay.</p>
+        </div>
+        <button id="claim-start" class="primary">💸 Start — what am I owed?</button>
+        <p class="hint" style="margin-top:10px">Free, private, and works offline. Covers canceled flights, delays, bumping, late or lost bags, downgrades, and unused extras — U.S. plus EU/UK/Canada cash rules.</p>
+      </div>
+
+      <div class="watchlist">
+        <h3>Watchlist <span class="hint">(saved locally)</span></h3>
+        <div id="watchlist-items" class="watchlist-items"></div>
+        <p id="watchlist-empty" class="hint">Star any trip below to track it. Hit “Refresh all” to re-check.</p>
+        <button id="refresh-watchlist" class="ghost hidden">↻ Refresh all watched trips</button>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="results">
+      <div id="status" class="status"></div>
+      <div id="trend" class="trend hidden"></div>
+      <div id="results">
+        <div class="intro">
+          <div class="big">✈️🗺️</div>
+          <h2>Where would you like to go?</h2>
+          <p>Pick your dates on the left and press <strong>“Show me the deals.”</strong> You’ll see
+            every place Delta can take you out of Helena — and how much your companion ticket saves
+            on each one.</p>
+          <p>Not sure when? Tick <strong>“I’m flexible”</strong> and we’ll hunt for the cheapest week.</p>
+        </div>
+      </div>
+
+      <details class="help">
+        <summary>How the value math works (and the honest caveats)</summary>
+        <p>Without the certificate, two of you pay full fare = <em>2 × ticket price</em>.
+          With it, you buy your own ticket and the companion flies for taxes &amp; fees only —
+          capped at about <strong>$80 round-trip domestic</strong> or <strong>$250 round-trip
+          international</strong> (Mexico/Caribbean/Central America), for up to 4 segments.</p>
+        <p><strong>Net savings = your fare − companion taxes.</strong> Across destinations, pricier
+          eligible routes squeeze the most out of the cert — that’s how the value scan ranks them.</p>
+        <p>Both the <strong>Platinum</strong> and <strong>Reserve</strong> cards reach the
+          <em>same destinations</em> — the U.S. (incl. Alaska &amp; Hawaii), Mexico, the Caribbean,
+          and Central America. They differ only by cabin: Platinum is Main Cabin
+          (<code>L/U/T/X/V</code>); Reserve adds <code>W/S</code> Comfort+, <code>A/G</code> Premium
+          Select, and <code>I/Z</code> First. Delta One and Basic Economy are never eligible. (The
+          Gold card has no companion certificate.)</p>
+        <p class="caveat">⚠ <strong>Booking class is the catch.</strong> The certificate only tickets
+          if the flight has open inventory in an eligible class. The keyless <strong>Google Flights</strong>
+          source shows real prices but <em>not</em> the booking class — so eligibility shows as
+          “Confirm on Delta.” Add Amadeus keys (precise fare-class mode) to turn that into a firm
+          eligible / not-eligible call. Either way, confirm the class when you book on delta.com.</p>
+      </details>
+    </section>
+  </main>
+
+  <!-- Setup modal -->
+  <div id="setup-modal" class="modal hidden">
+    <div class="modal-card">
+      <button class="modal-close" id="setup-close">×</button>
+      <h2>Connect live Delta fares (Amadeus)</h2>
+      <ol>
+        <li>Create a free account at <a href="https://developers.amadeus.com" target="_blank" rel="noopener">developers.amadeus.com</a>.</li>
+        <li>Create an app → copy the <strong>API Key</strong> and <strong>API Secret</strong>.</li>
+        <li>In the project folder, copy <code>.env.example</code> to <code>.env</code> and paste them:
+          <pre>AMADEUS_CLIENT_ID=your_key
+AMADEUS_CLIENT_SECRET=your_secret
+AMADEUS_ENV=test</pre></li>
+        <li>Restart the server (<code>node server.js</code>). Flip <code>AMADEUS_ENV</code> to
+          <code>production</code> once your app is moved to production — the <strong>test</strong> dataset is
+          thin for small airports like Helena.</li>
+      </ol>
+      <p class="hint">2,000 free production calls/month. This dashboard caps scans at 30 routes to protect your quota.</p>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span>Local tool · no data leaves your machine except direct calls to Amadeus.</span>
+  </footer>
+
+  <script src="/rights-data.js"></script>
+  <script src="/airlines.js"></script>
+  <script src="/claim-engine.js"></script>
+  <script src="/viral.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

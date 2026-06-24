@@ -1,0 +1,14 @@
+{
+  "name": "delta-companion-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard that finds the best Delta Companion Certificate value on flights out of Helena, MT (HLN).",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

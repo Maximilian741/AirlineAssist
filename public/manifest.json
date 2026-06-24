@@ -1,0 +1,11 @@
+{
+  "name": "Fairfare — Companion deals & passenger rights",
+  "short_name": "Fairfare",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f1ea",
+  "theme_color": "#1565c0",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+  ]
+}
