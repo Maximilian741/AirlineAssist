@@ -2,6 +2,7 @@
 node_modules/
 *.log
 .DS_Store
-data/
+# Only ignore the runtime price-history folder at the repo ROOT — NOT src/data/ or mobile/src/data/
+/data/
 scratch/
 .claude/launch.json
