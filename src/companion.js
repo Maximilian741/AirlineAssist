@@ -17,6 +17,8 @@
 //     a flat fee — real taxes can be ~$20.
 //   * Delta One is excluded. Basic Economy (E class) is never eligible.
 
+import { computeCompanionTaxes, segmentsOf } from './taxes.js';
+
 // Tax/fee caps the companion pays, by zone + trip type (USD).
 export const COMPANION_TAX_CAPS = {
   domestic:      { roundTrip: 80,  oneWay: 40 },
@@ -195,17 +197,30 @@ export function computeValue(offer, companionResult, opts = {}) {
   const rawTaxes = offer?.price?.taxes;
   let companionTaxes = null;
   let estimated = false;
+  let taxBreakdown = null;
 
   if (currency !== 'USD') {
     // The $80/$250 caps are USD figures; don't apply them to a foreign-currency tax number.
     companionTaxes = rawTaxes != null && rawTaxes > 0 ? rawTaxes : null;
     estimated = companionTaxes == null;
   } else if (rawTaxes != null && rawTaxes > 0) {
+    // Provider gave a real tax breakdown (e.g. Amadeus) — nothing to estimate.
     companionTaxes = Math.min(rawTaxes, cap);
     estimated = false;
   } else {
-    companionTaxes = cap; // unknown/zero taxes -> conservative cap, never 0
-    estimated = true;
+    // No breakdown from the provider (e.g. Google Flights). These fees are statutory, so COMPUTE
+    // them instead of assuming the worst-case cap — which used to understate savings by ~$30-58.
+    const outboundSegments = segmentsOf(offer?.outbound, offer?.stops);
+    const inboundSegments = roundTrip ? segmentsOf(offer?.inbound, offer?.stops) : 0;
+    const computed = computeCompanionTaxes({ outboundSegments, inboundSegments, zone });
+    if (computed.total != null) {
+      companionTaxes = computed.total;
+      estimated = !computed.exact; // domestic is exact; international varies by country
+      taxBreakdown = computed.breakdown;
+    } else {
+      companionTaxes = cap; // truly no itinerary detail -> conservative cap, never 0
+      estimated = true;
+    }
   }
 
   const counts = companionResult.status === 'eligible' || companionResult.status === 'unknown';
@@ -217,7 +232,12 @@ export function computeValue(offer, companionResult, opts = {}) {
     companionTaxes: round2(companionTaxes),
     netSavings,
     currency,
-    estimate: estimated || companionResult.status === 'unknown',
+    // The TAX figure and the ELIGIBILITY question are separate: a computed-exact tax shouldn't be
+    // labelled "est." just because the provider can't show the booking class.
+    estimate: estimated,
+    taxExact: !estimated,
+    eligibilityUnconfirmed: companionResult.status === 'unknown',
+    taxBreakdown,
     taxCap: cap,
   };
 }

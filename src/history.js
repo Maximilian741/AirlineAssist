@@ -37,6 +37,8 @@ function key(r) {
  */
 export function record(obs) {
   if (obs == null || obs.price == null) return;
+  // Never let sample/fallback prices into the series: a fake low would drive a real "buy" verdict.
+  if (obs.source && /sample|mock|fallback/i.test(String(obs.source))) return;
   const now = new Date();
   const day = now.toISOString().slice(0, 10);
   const rec = {
@@ -51,11 +53,14 @@ export function record(obs) {
     source: obs.source || null,
   };
   const records = load();
-  // Replace a same-day point for the same route+date if present.
+  // Replace a same-day point for the same route+date if present, but never lose the day's low —
+  // the "lowest we've seen" claim depends on it.
   const k = key(rec);
   const idx = records.findIndex((r) => key(r) === k && r.day === day);
-  if (idx >= 0) records[idx] = rec;
-  else records.push(rec);
+  if (idx >= 0) {
+    const prevLow = records[idx].low != null ? records[idx].low : records[idx].price;
+    records[idx] = { ...rec, low: Math.min(prevLow, rec.price) };
+  } else records.push({ ...rec, low: rec.price });
   save(records);
 }
 
@@ -65,7 +70,15 @@ export function series({ origin, destination, departDate, returnDate }) {
   return load()
     .filter((r) => key(r) === k)
     .sort((a, b) => a.ts.localeCompare(b.ts))
-    .map((r) => ({ ts: r.ts, day: r.day, price: r.price, status: r.status, source: r.source }));
+    .map((r) => ({ ts: r.ts, day: r.day, price: r.price, low: r.low != null ? r.low : r.price, status: r.status, source: r.source }));
+}
+
+/** Every observation for a route regardless of travel date — for "what does this route usually cost". */
+export function routeSeries({ origin, destination }) {
+  return load()
+    .filter((r) => r.origin === origin && r.destination === destination)
+    .sort((a, b) => a.ts.localeCompare(b.ts))
+    .map((r) => ({ ts: r.ts, day: r.day, departDate: r.departDate, returnDate: r.returnDate, price: r.price }));
 }
 
 /** Everything we've ever tracked, grouped by route+date, for a dashboard overview. */

@@ -1,11 +1,16 @@
-# Helena → Anywhere · Delta Companion Value Finder
+# Fairfare
 
-A local web dashboard that finds where your **Delta SkyMiles Companion Certificate** (Amex
-Platinum/Reserve) gives you the most value on flights out of **Helena, MT (HLN)**.
+**Cheap companion fares out of Helena — and the receipts to claim what you're owed when a flight goes wrong.**
 
-It pulls **real Delta fares with no API key**, ranks trips by how much the certificate actually
-saves you, flags companion eligibility, and charts the **price trend over time** so you can catch
-deals as cheaper weeks open up.
+Fairfare started as a local dashboard for finding where a **Delta SkyMiles Companion Certificate**
+(Amex Platinum/Reserve) saves the most out of **Helena, MT (HLN)**. It has grown into a
+consumer-side air-travel toolkit: verified passenger rights, exact refund and compensation math,
+one-tap pre-filled claims, a claim tracker that knows the airline's legal clocks, a server-side
+watchdog that re-checks your booked trips for fare drops and schedule changes you can cash in on,
+and the government's own airline scorecard. Web app (zero-dependency Node) plus an Expo iOS/Android
+app in `mobile/`.
+
+Built to help travelers, not to milk them: no ads, no data selling, no airline kickbacks.
 
 ---
 
@@ -15,97 +20,104 @@ deals as cheaper weeks open up.
 node server.js
 ```
 
-Open <http://localhost:5173>. No `npm install` — zero dependencies. **Requires Node 18+** (uses
-built-in `fetch` and `http`).
+Open <http://localhost:5173>. No `npm install` — zero dependencies. **Requires Node 18+**
+(Node 22.18+ to run the test suite, which loads the mobile TypeScript directly).
 
-It works immediately with **live data and no signup**.
+```bash
+node --test
+```
 
----
+137 deterministic tests: the tax math, the claim engine, coverage, fare classes, the buy check,
+the claim tracker, the watchdog diff engine, the trend engine, the notification event engine — and
+**web ⇄ mobile parity sweeps** that fail if the two apps ever disagree on a legal or money answer.
 
-## Where the data comes from
-
-There is no public Delta API. The dashboard uses a tiered provider system (it picks the best
-available automatically):
-
-1. **Google Flights — keyless, default.** Delta fares are scraped from Google Flights' public
-   `?tfs=` deep-link (a base64 protobuf the app builds itself). **Real prices, no key, no signup.**
-   Honest limit: Google Flights doesn't expose the **booking class** (the `L/U/T/X/V` bucket), so
-   companion eligibility shows as **"Confirm on Delta"** rather than a hard yes/no. It's unofficial
-   and best-effort — if Google changes their page it can break, and the app falls back to sample
-   data rather than erroring.
-
-2. **Amadeus — optional, precise.** Add free Amadeus keys (below) to get the actual fare class per
-   segment, turning "Confirm on Delta" into a firm **eligible / not-eligible** call.
-
-3. **Sample data** — deterministic offline fallback if both live sources fail.
-
-### Optional: Amadeus precise-fare-class mode
-1. Free account at <https://developers.amadeus.com> → create an app → copy **API Key** + **Secret**.
-2. Copy `.env.example` → `.env`, paste them, set `AMADEUS_ENV=production` (the *test* dataset is
-   too thin for small airports like HLN).
-3. Restart. The badge flips to **LIVE · Amadeus**. (2,000 free production calls/month.)
+Mobile: `cd mobile && npm install && npx expo start` (Expo SDK 56). Set `EXPO_PUBLIC_API_BASE`
+to your server URL for live prices, the watchdog and trends; the rights guide, claim calculator,
+crisis mode and money moves work fully offline.
 
 ---
 
 ## What it does
 
-- **🌎 Everywhere (no destination needed)** — the default view. Give it dates and it scans Delta's
-  whole reachable network from HLN at once and ranks every destination, sorted by **Cheapest** or
-  **Best cert value**. Click any deal to jump to its flights + trend. ("Popular" ≈ 22 cities, ~5s;
-  "Everywhere" ≈ 50 cities, ~10s, via a small concurrency pool.)
-  - **Flexible dates** — tick "I'm flexible," give a window + trip length, and it finds the
-    *cheapest week* to each destination.
-- **Friendly, readable UI** — warm light theme by default (🌙 toggle for dark), plain-language
-  labels ("One ticket / Companion pays / You save"), built to be easy for anyone to use.
-- **Single-trip search** — every Delta option for a route/date, cheapest eligible first, with the
-  full HLN→SLC→destination routing, times, operator, and companion savings.
-- **Pick & compare** — choose specific destinations to compare side by side.
-- **Price calendar & trend** — sample the next ~8 departure weeks for a route to see how price
-  moves and which week is the deal; plus a sparkline of the price history you accumulate over time.
-- **Watchlist** — star trips (saved in your browser) and *Refresh all* to re-check them.
+### Find the deal
+- **Everywhere** — give it dates and it scans Delta's reachable network from HLN, ranks every
+  destination by cheapest fare or best certificate value; flexible-dates mode finds the cheapest week.
+- **Single-trip search** with full routing, exact companion taxes (statutory: AY/XF/ZP computed,
+  not guessed — corroborated against Delta's own "from $22"), and a **price verdict**: Buy / Wait /
+  Watch, with the exact evidence (lowest we've seen, slope over the last checks, days to departure,
+  route-wide history). Verdicts only appear once there's enough recorded data — never invented.
+- **Buy Check** — before you click buy: the true price with that airline's fee ceilings, whether
+  the trip is covered by EU261/UK261/APPR in each direction (and the nudge when EU metal would be),
+  the leverage you keep after buying from that airline's contract of carriage, the certificate
+  verdict for the fare class, and the airline's record from the DOT report.
 
-### The value math
-- Without the cert, two people pay `2 × fare`.
-- With it, you pay your fare and the companion flies for taxes/fees only — capped at **~$80
-  round-trip domestic** or **~$250 round-trip international** (Mexico/Caribbean/Central America),
-  up to 4 segments.
-- **Net savings = your fare − companion taxes.** When the source can't show taxes (Google Flights),
-  the companion cost is conservatively estimated at the cap (never $0), and the figure is marked
-  *est.*
+### Know what you're owed
+- **Your Rights** — 21 verified rights cards (DOT/eCFR/EU/UK/Canada, source-linked), the
+  escalation ladder, international cash compensation, honest legislation status, an "am I covered?"
+  checker, a decoder of nine airlines' contracts of carriage, and **the airline scorecard**:
+  on-time %, cancellations, mishandled bags, bumping and complaints per 100k, straight from the
+  U.S. DOT Air Travel Consumer Report, same period for every airline.
+- **What am I owed?** — a plain-language wizard → exact entitlements with the rule behind each,
+  including the **schedule-change refund** (a 3h/6h change you decline is a full cash refund on any
+  fare) → a demand letter, DOT complaint text, chargeback letter, small-claims notice and evidence
+  pack, all pre-filled with your trip details. You hit send.
+- **Claim tracker** — every filing starts the airline's legal clocks (30-day acknowledge, 60-day
+  answer, 7-business-day refund…). It tells you the day they miss one and what to do next; the
+  ladder never skips DOT.
+- **Crisis mode** — at the airport right now: six scenarios with numbered steps, the word-for-word
+  script, the evidence checklist, and a jump into the claim with the type pre-answered.
 
-### Companion eligibility (verified against delta.com + Amex, 2025/2026)
-| Card | Geography | Main | Comfort+ | Premium Select | First |
-|------|-----------|------|----------|----------------|-------|
-| **Platinum** | U.S. (incl. AK/HI), Mexico, Caribbean, Central America | L U T X V | — | — | — |
-| **Reserve**  | *same as Platinum* | L U T X V | W S | A G | I Z |
+### Let the machine watch
+- **My Trips** — save a trip and every claim deadline counts down (the 60-day chargeback wall, the
+  7/21-day Montreal notices…). One tap opens the fully pre-filled claim. Export deadlines to your
+  calendar with 7-day and 1-day reminders.
+- **Watchdog** — the server re-checks watched trips on a schedule and turns changes into money
+  levers: a fare drop → rebook and keep the difference (with that airline's exact repricing policy);
+  a significant schedule change → **"Write the refund request"** drafts the letter with the old and
+  new times. On the phone these arrive as notifications; on the web the My Trips tab carries a badge.
+- **Money moves** — 27 verified tactics, hidden-fee table, true-price calculator, card-protection
+  checker, fare-class decoder, schedule-change lever.
+- **Share cards** — 9:16 receipt/deadline/scorecard cards with fact-led captions.
 
-Both cards reach the **same destinations** — they differ only by cabin. Delta One and Basic
-Economy are never eligible. The **Gold** card has no companion certificate. A search only shows the
-cheapest published fare's class, so even in precise mode treat a match as "looks eligible — confirm
-the open seat when booking."
+---
+
+## Where the price data comes from
+
+There is no public Delta API. Providers are picked automatically:
+
+1. **Google Flights — keyless, default.** Real fares from Google Flights' public `?tfs=` deep-link.
+   Doesn't expose booking class, so certificate eligibility shows as "confirm on Delta". Rate-limits
+   bulk use from one IP; the app paces requests and says so honestly when throttled.
+2. **Amadeus — optional, precise.** Add keys to `.env` (`AMADEUS_ENV=production`) for exact fare
+   classes and reliable bulk scans.
+3. **Sample data** — deterministic offline fallback.
 
 ---
 
 ## Project layout
 
 ```
-server.js                    zero-dep server + JSON API + static hosting + provider routing
-src/companion.js             eligibility rules, value math, ranking (the engine)
-src/data/routes.js           HLN route map (via SLC), destinations + zones
-src/history.js               local price-history store (data/history.json) for trends
-src/providers/googleflights.js  keyless live data (builds tfs protobuf, parses aria-labels)
-src/providers/amadeus.js     optional precise data (OAuth + Flight Offers Search)
-src/providers/mock.js        deterministic sample fallback
-public/                      dashboard UI (index.html / styles.css / app.js)
+server.js                     zero-dep server + JSON API + static hosting + provider routing + watchdog sweeps
+src/companion.js              certificate eligibility, value math, ranking
+src/taxes.js                  exact statutory companion taxes (AY/XF/ZP/US)
+src/history.js                price-history store (data/history.json)
+src/trends.js                 trend engine: low seen, slope, direction, Buy/Wait/Watch verdict
+src/watchdog.js               registry + sweep + diff → money levers (14 CFR 260.2 + per-carrier CoC lines)
+src/providers/*.js            googleflights (keyless), amadeus (optional), mock
+public/                       web app: app.js + data/engine modules (claim-engine, trips, claimtrack,
+                              coverage, fareclass, buycheck, crisis, viral, rights/money/coc/scorecard/faredrop data)
+mobile/                       Expo app (TS ports of the engines; generated data files kept in sync by tests)
+test/                         node --test suite (incl. web⇄mobile parity)
 ```
 
 ### API
 - `GET  /api/health` · `GET /api/meta`
-- `POST /api/search`   `{origin,destination,departDate,returnDate,tier}`
-- `POST /api/explore`  `{departDate,returnDate,tier,scope:'popular'|'all'}` → every destination ranked
-- `POST /api/scan`     `{tier, trips:[...]}`
-- `POST /api/calendar` `{origin,destination,tier,weeks,tripLengthDays}` → price-by-week
-- `GET  /api/history?origin=&destination=&departDate=&returnDate=` → time series
+- `POST /api/search` · `POST /api/explore` · `POST /api/scan` · `POST /api/calendar`
+- `GET  /api/history?…` → recorded series · `GET /api/trend?origin&destination&departDate&returnDate` → verdict + series + route stats
+- `POST /api/watch` · `GET /api/watch` · `GET|DELETE /api/watch/:id` · `POST /api/watch/:id/ack` · `POST /api/watch/sweep`
 
-Add another source (SerpApi, Duffel, Kiwi) by creating `src/providers/<name>.js` that exports
-`searchOffers()` returning the normalized offer shape, then wire it into `chooseProvider()`.
+### Honesty rules baked in
+- Every legal figure links to its primary source and was adversarially re-verified; conditional
+  claims carry their condition into the letter; ceilings are never summed as "owed".
+- Nothing auto-submits to an airline or DOT — the app prepares and pre-addresses; the user sends.
+- Numbers are exact or absent. No "est." where a figure can be computed.

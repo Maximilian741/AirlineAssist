@@ -54,6 +54,7 @@ window.ClaimEngine = (function () {
         kind: 'choice',
         options: [
           { value: 'cancelled', label: 'My flight was canceled' },
+          { value: 'schedule', label: 'The airline changed my flight time or route before the trip' },
           { value: 'delayed', label: 'My flight was very late (I still flew)' },
           { value: 'bumped', label: 'I was bumped from an oversold flight' },
           { value: 'bag_late', label: 'My checked bag arrived late' },
@@ -76,9 +77,67 @@ window.ClaimEngine = (function () {
       },
     },
     {
+      id: 'schedDelta',
+      when: (a) => a.type === 'schedule',
+      q: {
+        title: 'How big was the change?',
+        help: 'How much later you now arrive (or earlier you now leave). If they added a stop or moved you to a different airport, pick that.',
+        kind: 'choice',
+        options: [
+          { value: '<1', label: 'Under 1 hour' },
+          { value: '1-2', label: '1 to under 2 hours' },
+          { value: '2-3', label: '2 to under 3 hours' },
+          { value: '3-4', label: '3 to under 4 hours' },
+          { value: '4-6', label: '4 to under 6 hours' },
+          { value: '6+', label: '6 hours or more' },
+          { value: 'route', label: 'They added a connection or changed my departure/arrival airport' },
+        ],
+      },
+    },
+    {
+      id: 'schedAccepted',
+      when: (a) => a.type === 'schedule',
+      q: {
+        title: 'Do you want to keep the new flight?',
+        help: 'The cash refund exists only if you decline the change. Say no here and the letter declines it for you.',
+        kind: 'choice',
+        options: [
+          { value: 'no', label: 'No — I want my money back' },
+          { value: 'yes', label: 'Yes — I’ll fly it (or already flew it)' },
+        ],
+      },
+    },
+    {
       id: 'region',
       when: (a) => a.type && a.type !== 'extra',
       q: { title: 'Where was the flight?', kind: 'choice', options: REGION_OPTS },
+    },
+    {
+      id: 'schedDirection',
+      when: (a) => a.type === 'schedule' && (a.region === 'from_eu' || a.region === 'from_uk') && a.schedDelta !== 'route',
+      q: {
+        title: 'Which way did it move?',
+        help: 'In Europe and the UK the two are treated differently: a later arrival is a “delay,” an earlier departure counts as a cancellation.',
+        kind: 'choice',
+        options: [
+          { value: 'later', label: 'I now arrive later' },
+          { value: 'earlier', label: 'I now leave earlier' },
+        ],
+      },
+    },
+    {
+      id: 'schedNotice',
+      when: (a) => a.type === 'schedule' && (a.region === 'from_eu' || a.region === 'from_uk') && (a.schedDelta === 'route' || a.schedDirection === 'earlier'),
+      q: {
+        title: 'How far ahead did they tell you?',
+        help: 'An earlier departure counts as a cancellation in Europe and the UK — and short notice is what makes it compensable.',
+        kind: 'choice',
+        options: [
+          { value: '14+', label: '14 days or more before departure' },
+          { value: '7-13', label: '7 to 13 days before' },
+          { value: '<7', label: 'Less than 7 days before' },
+        ],
+      },
     },
     {
       id: 'voluntary',
@@ -104,7 +163,7 @@ window.ClaimEngine = (function () {
     },
     {
       id: 'distanceBand',
-      when: (a) => (a.region === 'from_eu' || a.region === 'from_uk') && ['cancelled', 'delayed', 'bumped', 'downgrade'].includes(a.type),
+      when: (a) => (a.region === 'from_eu' || a.region === 'from_uk') && ['cancelled', 'delayed', 'bumped', 'downgrade', 'schedule'].includes(a.type),
       q: {
         title: 'How long was the flight?',
         help: 'A flight between Europe and the U.S. is “long.”',
@@ -146,7 +205,7 @@ window.ClaimEngine = (function () {
     },
     {
       id: 'payment',
-      when: (a) => a.type === 'extra' || a.type === 'downgrade' || a.type === 'bag_late' || (a.type === 'cancelled' && a.traveled === 'no'),
+      when: (a) => a.type === 'extra' || a.type === 'downgrade' || a.type === 'bag_late' || (a.type === 'cancelled' && a.traveled === 'no') || (a.type === 'schedule' && a.schedAccepted === 'no'),
       q: {
         title: 'How did you pay?',
         help: 'This sets how fast they must refund you.',
@@ -228,6 +287,46 @@ window.ClaimEngine = (function () {
       }
       addIntlComp(E, a, 'cancellation');
       addAmenities(E, a);
+    }
+
+    if (a.type === 'schedule') {
+      const sig = scheduleIsSignificant(a);
+      const declined = a.schedAccepted === 'no';
+      if (sig && declined) {
+        const usTouching = a.region === 'us' || a.region === 'intl_from_us';
+        E.push({
+          strength: usTouching ? 'strong' : 'conditional',
+          title: 'A full cash refund of your fare',
+          amountText: '100% of what you paid — fare, taxes, and any add-on fees — even on a nonrefundable or basic economy ticket',
+          detail: 'A change this large is a “significant change” under the federal refund rule. If you decline the new itinerary, the airline must refund you to your original form of payment — not a voucher, not a credit. The size of the change is the whole test; the fare type does not matter.' + (usTouching ? '' : ' The U.S. rule covers flights to, from or within the United States; a trip that never touches the U.S. gets its refund under EU261 Art. 8 / UK261 / Canada APPR instead — same idea, different citation.'),
+          ...(usTouching ? {} : { condition: 'under U.S. law only if the trip starts or ends in the United States (14 CFR 260.2 “covered flight”)' }),
+          rule: '14 CFR 260.2 & 260.6',
+          ruleUrl: URL.refund,
+          deadline: 'They must pay ' + refundDeadline + '.',
+        });
+      } else if (sig && !declined) {
+        E.push({
+          strength: 'info',
+          title: 'You kept the new flight — so the refund right does not apply',
+          amountText: 'No cash owed for the change itself',
+          detail: 'The federal refund exists only when you DECLINE a significant change. Keeping the flight is fine — but you gave up the refund. What you still have: the change is your leverage to be moved, free, to any flight you would rather take (ask by flight number), and any prepaid extra that no longer applies (a seat you lost, for instance) is refundable.',
+          rule: '14 CFR 260.2 & 260.6',
+          ruleUrl: URL.refund,
+          deadline: '',
+        });
+      } else {
+        E.push({
+          strength: 'action',
+          title: 'Below the federal line — but probably above the airline’s own',
+          amountText: 'Free rebooking to a flight you prefer',
+          detail: (a.region === 'us' ? 'The federal refund right needs a 3-hour change (or a new airport / added stop). ' : 'The federal refund right needs a 6-hour change on international trips (or a new airport / added stop). ') +
+            'Below that, most carriers’ contracts of carriage still unlock a free change once a schedule moves past their own trigger — United 30 min, Alaska/Southwest 60, Delta 120, American 240. Look yours up in the contract decoder, then ask by flight number for the flight you actually want.',
+          rule: 'Airline contract of carriage',
+          ruleUrl: '',
+          deadline: '',
+        });
+      }
+      addScheduleIntl(E, a);
     }
 
     if (a.type === 'delayed') {
@@ -365,6 +464,92 @@ window.ClaimEngine = (function () {
     };
   }
 
+  // 14 CFR 260.2 "significant change": arrival 3h+ later (domestic) / 6h+ (international),
+  // departure that much earlier, a different origin/destination airport, or an added connection.
+  const SCHED_SIG_DOM = ['3-4', '4-6', '6+'];
+  const SCHED_SIG_INTL = ['6+'];
+  function scheduleIsSignificant(a) {
+    if (a.schedDelta === 'route') return true;
+    const bands = a.region === 'us' ? SCHED_SIG_DOM : SCHED_SIG_INTL;
+    return bands.includes(a.schedDelta);
+  }
+
+  // Europe/UK: a schedule change told to you late is treated as a cancellation (EC 261 Art. 5(1)(c)):
+  // <14 days notice — unless 7–13 days AND the new times are within 2h earlier / 4h later,
+  // or <7 days AND within 1h earlier / 2h later. Compensation keeps the extraordinary-circumstances defence.
+  function addScheduleIntl(E, a) {
+    const band = a.distanceBand || 'long';
+    const later3h = ['3-4', '4-6', '6+'].includes(a.schedDelta);
+    // Canada APPR (SOR/2019-150 s.12, s.19): compensation keys to being told 14 days or less before departure
+    // AND the cause being within the airline's control. If you take the refund instead, s.19(2) fixes it at
+    // CAD 400 (large carrier); if you fly and arrive 3h+ late it is CAD 400 / 700 / 1,000 by arrival delay.
+    if (a.region === 'canada') {
+      if (a.schedDelta === 'route' || later3h) {
+        const declined = a.schedAccepted === 'no';
+        E.push({
+          strength: 'conditional',
+          title: 'Canada APPR compensation for a late-notice change',
+          amountText: declined ? 'CAD 400 (large airline; CAD 125 small) — the fixed amount when you take the refund' : 'CAD 400 / 700 / 1,000 (large airlines), by how late you finally arrive (3–6h / 6–9h / 9h+)',
+          detail: 'APPR treats a delay or cancellation you were told about 14 days or less before departure, caused by something within the airline’s control, as compensable' + (declined ? '. Because you are taking the refund rather than flying, the amount is the fixed CAD 400 (s.19(2)).' : ' — by how late you arrive at your final destination (s.19(1)).') + (a.schedDelta === 'route' ? ' Depends on the new arrival time: you must arrive 3+ hours later than originally scheduled.' : ''),
+          condition: 'owed only if you were told 14 days or less before departure AND the cause was within the airline’s control' + (a.schedDelta === 'route' ? ' AND you arrive 3+ hours later than originally scheduled' : ''),
+          rule: 'Canada APPR s.12 & s.19',
+          ruleUrl: URL.appr,
+          deadline: 'File within 1 year.',
+        });
+      }
+      return;
+    }
+    if (a.region !== 'from_eu' && a.region !== 'from_uk') return;
+  
+    // Europe/UK. Two different animals (CJEU):
+    //  * a LATER arrival on the same flight is a DELAY (Sturgeon C-402/07): compensation only if you fly it and
+    //    arrive 3h+ late; notice is irrelevant; declining gets you the refund (Art. 8, from 5h) but no cash;
+    //  * an EARLIER departure of more than 1 hour is a CANCELLATION (Azurair C-146/20): compensation unless you
+    //    were told 14+ days ahead, or 7–13 days ahead with the move under 2h (Art. 5(1)(c)); no halving.
+    //  * an added connection / airport change depends on the new times — shown as conditional on them.
+    const eu = a.region === 'from_eu';
+    const amt = eu ? '€' + euAmount(band) : '£' + ukAmount(band, '9+');
+    const rule = eu ? 'EU Regulation 261/2004' : 'UK261 (retained EC 261/2004)';
+    const ruleUrl = eu ? URL.eu261 : URL.uk261;
+    const deadline = eu ? 'Claim window varies by country (often 2–3 years).' : 'Generally up to 6 years to claim (England/Wales).';
+    const extra = 'the airline cannot show extraordinary circumstances — a commercial schedule change normally is not one';
+    const push = (title, detail, condition) => E.push({ strength: 'conditional', title, amountText: amt + ' per person, in cash', detail, condition, rule, ruleUrl, deadline });
+  
+    if (a.schedDelta === 'route') {
+      push((eu ? 'EU261' : 'UK261') + ' cash compensation — depends on the new times',
+        'A new connection or airport by itself is not the test here; the times are. If you fly it and arrive 3+ hours later than originally scheduled, that is a compensable delay. If instead the change means leaving more than an hour earlier and you were told less than 14 days ahead, it counts as a cancellation and compensation is due even if you decline it.',
+        'owed only if you arrive 3+ hours later than originally scheduled (and fly it), OR the departure moved more than 1 hour earlier with under 14 days’ notice — and ' + extra);
+      return;
+    }
+    if (a.schedDirection === 'later') {
+      if (!later3h) return;
+      if (a.schedAccepted === 'no') {
+        E.push({
+          strength: 'info',
+          title: (eu ? 'EU261' : 'UK261') + ': the refund is yours, but delay compensation needs you to fly',
+          amountText: 'No cash on top of the refund',
+          detail: 'A later arrival on the same flight is treated as a delay, not a cancellation. Declining a delay of 5+ hours gets your fare back (Art. 8), but the €/£ compensation is only paid to passengers who travel and reach their destination 3+ hours late. If you would rather have the cash, fly it and claim.',
+          rule, ruleUrl, deadline: '',
+        });
+        return;
+      }
+      push((eu ? 'EU261' : 'UK261') + ' cash compensation — you arrive 3+ hours late',
+        'A schedule change that lands you 3+ hours later than originally scheduled is a compensable delay when you fly it (Sturgeon, C-402/07). Notice does not matter for delays, and the amount is not halved.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
+        'owed only if you fly it and actually arrive 3+ hours later than the original schedule, and ' + extra);
+      return;
+    }
+    if (a.schedDirection === 'earlier') {
+      const n = a.schedNotice;
+      if (!n || n === '14+') return;
+      const moreThan1h = ['1-2', '2-3', '3-4', '4-6', '6+'].includes(a.schedDelta);
+      const moreThan2h = ['2-3', '3-4', '4-6', '6+'].includes(a.schedDelta);
+      if (!(n === '<7' ? moreThan1h : moreThan2h)) return;
+      push((eu ? 'EU261' : 'UK261') + ' cash compensation — an earlier departure counts as a cancellation',
+        'Bringing your flight forward by more than an hour is a cancellation in law (CJEU Azurair, C-146/20). With ' + (n === '<7' ? 'under 7 days’ notice' : '7–13 days’ notice and a move of 2+ hours') + ', compensation is due on top of the refund or rebooking — whether or not you take the earlier flight, and it is not halved.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
+        'owed only if ' + extra);
+    }
+  }
+
   function addIntlComp(E, a, kind) {
     const region = a.region;
     const band = a.distanceBand;
@@ -494,14 +679,19 @@ window.ClaimEngine = (function () {
       const cnd = e.condition ? ` (${e.condition})` : '';
       return `• ${e.title}: ${e.amountText}, under ${e.rule}${cnd}.`;
     });
-    const dateLine = a.incidentDate ? ` on ${a.incidentDate}` : '';
+    // For a pre-trip schedule change the date is when the airline changed it, not the flight date.
+    const sched = a.type === 'schedule';
+    const dateLine = a.incidentDate && !sched ? ` on ${a.incidentDate}` : '';
+    const opening = sched
+      ? `Regarding the above booking: ${a.incidentDate ? 'on ' + a.incidentDate + ', ' : ''}${incidentSentence(a)}`
+      : `On the above flight${dateLine}, ${incidentSentence(a)}`;
     return [
       'To: [AIRLINE] Customer Relations',
       'Re: Flight [FLIGHT #]' + dateLine + ', [ORIGIN]→[DESTINATION], confirmation [CONFIRMATION #]',
       '',
       'To whom it may concern,',
       '',
-      `On the above flight${dateLine}, ${incidentSentence(a)} Under the applicable rules, I am entitled to the following, and I am formally requesting it now:`,
+      `${opening} Under the applicable rules, I am entitled to the following, and I am formally requesting it now:`,
       '',
       ...(claimLines.length ? claimLines : ['• A refund/compensation as required by the applicable rules.']),
       '',
@@ -522,6 +712,8 @@ window.ClaimEngine = (function () {
       case 'cancelled':
       case 'delayed':
         return 'Flight delays / cancellations';
+      case 'schedule':
+        return 'Refunds';
       case 'bumped':
         return 'Oversales / denied boarding (bumping)';
       case 'bag_late':
@@ -554,6 +746,12 @@ window.ClaimEngine = (function () {
     switch (a.type) {
       case 'cancelled':
         return a.traveled === 'no' ? 'the airline canceled my flight and I chose not to travel.' : 'the airline canceled my original flight.';
+      case 'schedule': {
+        const SIZE = { '<1': 'under an hour', '1-2': '1–2 hours', '2-3': '2–3 hours', '3-4': '3–4 hours', '4-6': '4–6 hours', '6+': 'more than 6 hours' };
+        const size = a.schedDelta === 'route' ? 'by adding a connection or changing my airport' : SIZE[a.schedDelta] ? 'by ' + SIZE[a.schedDelta] : 'significantly';
+        const times = a.schedFrom && a.schedTo ? ' (originally ' + a.schedFrom + ', now ' + a.schedTo + ')' : '';
+        return 'the airline changed my itinerary after purchase ' + size + times + (a.schedAccepted === 'no' ? '. I do not accept the new itinerary and am declining it in writing here.' : '.');
+      }
       case 'delayed':
         return 'my flight arrived significantly late.';
       case 'bumped':
@@ -583,7 +781,7 @@ window.ClaimEngine = (function () {
       '[CONFIRMATION #]': d.confirmation,
       '[YOUR NAME]': d.name,
       '[PHONE / EMAIL]': d.email,
-      '[DATE]': a.incidentDate,
+      '[DATE]': a.type === 'schedule' ? a.flightDate : a.incidentDate,
     };
     let out = text;
     for (const k in map) {
@@ -615,5 +813,73 @@ window.ClaimEngine = (function () {
     ].join('\n');
   }
 
-  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, FLOW };
+  /**
+   * Final notice before small claims — the escalation airlines least want you to reach.
+   *
+   * WHY IT WORKS: the Airline Deregulation Act preempts most state consumer-protection suits, but
+   * American Airlines v. Wolens (513 U.S. 219) holds that a plain BREACH OF CONTRACT claim — the
+   * airline failing to do what its own Contract of Carriage promises — is NOT preempted. Small
+   * claims needs no lawyer, and defending one costs an airline more than the claim is usually
+   * worth, so a credible, specific pre-suit notice is often the letter that actually gets paid.
+   *
+   * @param {object} a  claim answers
+   * @param {object} d  trip details
+   * @param {object} [opt] { amount, deadlineDays, cocRule }
+   */
+  function smallClaimsNotice(a, d, opt) {
+    d = d || {};
+    opt = opt || {};
+    const days = opt.deadlineDays || 14;
+    const by = addDays(new Date().toISOString().slice(0, 10), days);
+    const amount = opt.amount ? String(opt.amount) : '[AMOUNT]';
+    const airline = d.airline || '[AIRLINE]';
+    const rule = opt.cocRule
+      ? `, and specifically ${opt.cocRule} of your Contract of Carriage`
+      : ', including the obligations set out in your Contract of Carriage';
+    return [
+      'FINAL NOTICE BEFORE LEGAL ACTION',
+      '',
+      `To: ${airline} — Customer Relations / Legal Department`,
+      `Re: Flight ${d.flightNo || '[FLIGHT #]'}${a.incidentDate ? ' on ' + a.incidentDate : ''}, ${d.origin || '[ORIGIN]'}→${d.dest || '[DESTINATION]'}, confirmation ${d.confirmation || '[CONFIRMATION #]'}`,
+      `Amount in dispute: ${amount}`,
+      '',
+      'To whom it may concern,',
+      '',
+      `I have previously requested resolution of this matter and have not received satisfactory redress. On the flight identified above, ${incidentSentence(a)}`,
+      '',
+      `This is a breach of the transportation contract between us${rule}. I am giving written notice that if payment of ${amount} is not received within ${days} days of the date of this letter${by ? ` (on or before ${by})` : ''}, I intend to file a claim in small claims court in my county of residence, and to seek my filing costs in addition to the amount above.`,
+      '',
+      'For the avoidance of doubt: I am asserting a state-law breach-of-contract claim, which the Supreme Court held in American Airlines, Inc. v. Wolens, 513 U.S. 219 (1995), is NOT preempted by the Airline Deregulation Act. I am not asserting a state consumer-protection claim.',
+      '',
+      'I would prefer to resolve this without a filing. Payment to my original form of payment, or a check to the address below, will close the matter.',
+      '',
+      'Sincerely,',
+      d.name || '[YOUR NAME]',
+      d.email || '[PHONE / EMAIL]',
+      '[MAILING ADDRESS]',
+    ].join('\n');
+  }
+
+  /** Evidence checklist tailored to the incident — what a court (or a claims adjuster) expects. */
+  function evidencePack(a) {
+    const base = [
+      'Your booking confirmation and receipt showing what you paid',
+      'Boarding pass(es), or the check-in record if you never boarded',
+      'Every written exchange with the airline (screenshots with timestamps)',
+      'A short timeline: what was scheduled, what happened, when',
+    ];
+    const extra = {
+      bumped: ['The written statement of denied-boarding rights they are required to hand you', 'Your original vs. replacement scheduled arrival times', 'Your one-way fare, to compute the 200%/400% tier'],
+      cancelled: ['The cancellation notice with its timestamp', 'The stated cause (controllable vs. weather/ATC)', 'Receipts for any costs you had to cover'],
+      schedule: ['Your original itinerary (the confirmation email) and the schedule-change notice, both with timestamps', 'A screenshot of the new times next to the old — the size of the change is the whole case', 'Your written decline of the new itinerary, and the date you sent it'],
+      delayed: ['The stated cause of the delay', 'Actual vs. scheduled arrival time at your final destination', 'Meal/hotel receipts if you paid out of pocket'],
+      bag_late: ['Your Mishandled Baggage Report reference number', 'Bag tag stubs', 'Receipts for essentials you bought while it was missing'],
+      bag_lost: ['Your Mishandled Baggage Report reference number', 'An itemised list of contents with proof of value (receipts/photos)'],
+      downgrade: ['What you paid vs. the cabin you actually flew', 'The seat map or boarding pass showing the downgrade'],
+      extra: ['Proof you paid for the service', 'Evidence it wasn’t delivered (e.g. a Wi-Fi error screenshot)'],
+    };
+    return base.concat(extra[a.type] || []);
+  }
+
+  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, smallClaimsNotice, evidencePack, FLOW };
 })();

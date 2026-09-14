@@ -20,6 +20,8 @@ import * as mock from './src/providers/mock.js';
 import { evaluateOffer, listTiers, compareOffers, compareByValue } from './src/companion.js';
 import { ORIGIN, DESTINATIONS, zoneOf } from './src/data/routes.js';
 import * as history from './src/history.js';
+import * as watchdog from './src/watchdog.js';
+import * as trends from './src/trends.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -102,6 +104,20 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/explore' && req.method === 'POST') return handleExplore(req, res);
     if (url.pathname === '/api/calendar' && req.method === 'POST') return handleCalendar(req, res);
     if (url.pathname === '/api/history') return handleHistory(res, url);
+    if (url.pathname === '/api/trend') return handleTrend(res, url);
+
+    // ---- watchdog: register a trip, poll its alerts, force a sweep ----
+    if (url.pathname === '/api/watch' && req.method === 'POST') return handleWatchRegister(req, res);
+    if (url.pathname === '/api/watch' && req.method === 'GET') return json(res, { watches: watchdog.list(), summary: watchdog.summary() });
+    if (url.pathname === '/api/watch/sweep' && req.method === 'POST') {
+      const r = await watchdog.sweep(runSearch, { log: (m) => console.log('  ' + m), onPrice: history.record });
+      return json(res, { ...r, summary: watchdog.summary() });
+    }
+    const wm = url.pathname.match(/^\/api\/watch\/([A-Za-z0-9_-]+)$/);
+    if (wm && req.method === 'GET') { const w = watchdog.get(wm[1]); return w ? json(res, w) : json(res, { error: 'Not found' }, 404); }
+    if (wm && req.method === 'DELETE') { watchdog.unregister(wm[1]); return json(res, { ok: true }); }
+    const am = url.pathname.match(/^\/api\/watch\/([A-Za-z0-9_-]+)\/ack$/);
+    if (am && req.method === 'POST') return json(res, watchdog.ack(am[1]) || { error: 'Not found' });
 
     if (url.pathname.startsWith('/api/')) return json(res, { error: 'Unknown endpoint' }, 404);
 
@@ -371,6 +387,33 @@ async function handleCalendar(req, res) {
   return json(res, { destination, tripLengthDays: len, points, source });
 }
 
+// Register a trip for automatic re-checking. Baselines from the current best offer so the very
+// first sweep can already detect a change.
+async function handleWatchRegister(req, res) {
+  const body = await readBody(req);
+  const { origin = 'HLN', destination, departDate, returnDate, tier = 'platinum', id } = body || {};
+  if (!destination || !departDate) return json(res, { error: 'destination and departDate are required.' }, 400);
+  const dest = String(destination).toUpperCase();
+  let baseline = null;
+  try {
+    const r = await runSearch({ origin, destination: dest, departDate, returnDate, adults: 1 }, tier);
+    baseline = r.offers.find((o) => o.companion && o.companion.status !== 'ineligible') || r.offers[0] || null;
+  } catch { /* baseline on first sweep instead */ }
+  const w = watchdog.register({ id, origin, destination: dest, departDate, returnDate, zone: zoneOf(dest), iata: 'DL', tier }, baseline);
+  return json(res, w);
+}
+
+// Background sweep: every 6 hours by default (WATCH_INTERVAL_MIN to override), first run ~2 min
+// after boot so a fresh deploy doesn't hammer the source. Cheap with Amadeus; paced without.
+const WATCH_MIN = Number(process.env.WATCH_INTERVAL_MIN || 360);
+if (WATCH_MIN > 0) {
+  setTimeout(() => {
+    const tick = () => watchdog.sweep(runSearch, { log: (m) => console.log('  ' + m), onPrice: history.record }).catch((e) => console.log('  watchdog error:', e.message));
+    tick();
+    setInterval(tick, WATCH_MIN * 60 * 1000);
+  }, 2 * 60 * 1000).unref();
+}
+
 function handleHistory(res, url) {
   const origin = url.searchParams.get('origin') || 'HLN';
   const destination = url.searchParams.get('destination');
@@ -378,6 +421,26 @@ function handleHistory(res, url) {
   const returnDate = url.searchParams.get('returnDate') || null;
   if (!destination) return json(res, { summary: history.summary() });
   return json(res, { series: history.series({ origin, destination, departDate, returnDate }) });
+}
+
+// Price trend for one trip: the recorded series + a verdict computed from it (src/trends.js).
+// Everything returned is derived from observations this server actually stored.
+function handleTrend(res, url) {
+  const origin = (url.searchParams.get('origin') || 'HLN').toUpperCase();
+  const destination = (url.searchParams.get('destination') || '').toUpperCase();
+  const departDate = url.searchParams.get('departDate') || null;
+  const returnDate = url.searchParams.get('returnDate') || null;
+  if (!destination) return json(res, { error: 'destination required' }, 400);
+  // The client's LOCAL date drives "days to departure" — the server may sit in another timezone.
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : null;
+  const series = departDate ? history.series({ origin, destination, departDate, returnDate }) : [];
+  const trip = trends.analyze(series, { departDate, today });
+  // Route-wide context: what this route has cost across every date we've seen.
+  const route = history.routeSeries({ origin, destination });
+  const routePrices = route.map((r) => r.price).sort((a, b) => a - b);
+  const q = (f) => routePrices[Math.min(routePrices.length - 1, Math.floor(f * routePrices.length))];
+  const routeStats = routePrices.length ? { n: routePrices.length, min: routePrices[0], median: q(0.5), p25: q(0.25), p75: q(0.75), max: routePrices[routePrices.length - 1] } : { n: 0 };
+  return json(res, { origin, destination, departDate, returnDate, trip, route: routeStats, summary: trends.summaryLine(trip), spark: trends.sparkline(trip.points || []) });
 }
 
 function amadeusHint(err) {
@@ -398,7 +461,13 @@ async function serveStatic(pathname, res) {
   try {
     const data = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    // no-cache: the app ships as plain files with no build hashes, so a browser holding a stale
+    // (or worse, partially-fetched) copy of index.html/app.js/styles.css breaks silently after
+    // every deploy. Force revalidation — these files are small and served locally/cheaply.
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-cache, must-revalidate',
+    });
     res.end(data);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' });

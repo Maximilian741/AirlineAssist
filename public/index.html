@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Helena → Anywhere · Delta Companion Value Finder</title>
+  <title>Fairfare · companion deals &amp; passenger rights</title>
   <meta name="theme-color" content="#1565c0" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -17,15 +17,15 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">✈</span>
+      <span class="brand-mark">F</span>
       <div>
-        <h1>Helena&nbsp;→&nbsp;Anywhere</h1>
-        <p class="sub">Where can your <strong>companion fly almost free?</strong> · <span id="origin-label">HLN</span></p>
+        <h1>Fairfare</h1>
+        <p class="sub">Companion deals &amp; passenger rights · <span id="origin-label">HLN</span></p>
       </div>
     </div>
     <div class="source">
       <span id="source-badge" class="badge">checking…</span>
-      <button id="theme-toggle" title="Switch light / dark">🌙</button>
+      <button id="theme-toggle" title="Switch light / dark"></button>
     </div>
   </header>
 
@@ -45,18 +45,20 @@
       </div>
 
       <div class="tabs" role="tablist">
-        <button class="tab active" data-mode="explore">🌎 Everywhere</button>
+        <button class="tab active" data-mode="explore">Everywhere</button>
         <button class="tab" data-mode="single">Single trip</button>
         <button class="tab" data-mode="scan">Pick &amp; compare</button>
-        <button class="tab" data-mode="rights">🛡️ Your Rights</button>
-        <button class="tab" data-mode="claim">💸 What am I owed?</button>
+        <button class="tab" data-mode="rights">Your rights</button>
+        <button class="tab" data-mode="claim">What am I owed?</button>
+        <button class="tab" data-mode="moves">Money moves</button>
+        <button class="tab" data-mode="trips">My trips</button>
       </div>
 
       <!-- Everywhere: no destination needed -->
       <div id="mode-explore" class="mode">
         <div class="checkline">
           <input type="checkbox" id="exp-flex" />
-          <label for="exp-flex">🪶 I’m flexible — find the cheapest week</label>
+          <label for="exp-flex">I’m flexible — find the cheapest week</label>
         </div>
         <div class="row">
           <div class="field">
@@ -86,7 +88,7 @@
           </div>
           <p class="hint">Checks Delta flights from Helena (all connect through Salt Lake City) and ranks where you can go. <b>Popular spots</b> is faster and more reliable; a big <b>Everywhere</b> scan can bump into Google’s free limit (you’ll get a clear note if it does).</p>
         </div>
-        <button id="explore-btn" class="primary">🌎 Show me the deals</button>
+        <button id="explore-btn" class="primary">Show me the deals</button>
       </div>
 
       <!-- Single trip -->
@@ -135,12 +137,13 @@
           <p><strong>Know your rights.</strong> Most travelers never claim what they’re owed, simply because the rules aren’t obvious. Every fact in this guide is checked against the actual government rules — and links to the source so you can verify it.</p>
         </div>
         <div class="rights-nav" id="rights-nav">
-          <button data-jump="rights-owed">💰 What they owe you</button>
-          <button data-jump="rights-getpaid">🪜 How to get paid</button>
-          <button data-jump="rights-intl">🌍 Europe / UK / Canada cash</button>
-          <button data-jump="rights-law">📜 The law (what’s real)</button>
-          <button data-jump="rights-record">📊 Check their record</button>
-          <button data-jump="rights-allies">🤝 Who's on your side</button>
+          <button data-jump="rights-coc">Your airline's own contract</button>
+          <button data-jump="rights-owed">What they owe you</button>
+          <button data-jump="rights-getpaid">How to get paid</button>
+          <button data-jump="rights-intl">Europe / UK / Canada cash</button>
+          <button data-jump="rights-law">The law (what’s real)</button>
+          <button data-jump="rights-record">Check their record</button>
+          <button data-jump="rights-allies">Who's on your side</button>
         </div>
         <p class="hint" id="rights-verified"></p>
       </div>
@@ -150,8 +153,31 @@
         <div class="rights-intro">
           <p><strong>Flight go wrong?</strong> Answer a few plain questions and get the exact amount the airline owes you, the rule that says so, and a ready-to-send demand letter — citing the law that makes them pay.</p>
         </div>
-        <button id="claim-start" class="primary">💸 Start — what am I owed?</button>
+        <button id="claim-start" class="primary">Start — what am I owed?</button>
         <p class="hint" style="margin-top:10px">Free, private, and works offline. Covers canceled flights, delays, bumping, late or lost bags, downgrades, and unused extras — U.S. plus EU/UK/Canada cash rules.</p>
+      </div>
+
+      <!-- Money Moves: the playbook + tools (renders in the results panel) -->
+      <div id="mode-moves" class="mode hidden">
+        <div class="rights-intro">
+          <p><strong>The airline playbook.</strong> Verified, money-in-your-pocket tactics most people never hear about — with the exact steps and the honest risk.</p>
+        </div>
+        <div class="rights-nav" id="moves-nav">
+          <button data-jump="mm-buycheck">Before you buy: run the check</button>
+          <button data-jump="mm-play">The playbook</button>
+          <button data-jump="mm-true">True price calculator</button>
+          <button data-jump="mm-fees">The fees they bury</button>
+          <button data-jump="mm-cards">Money you already have</button>
+        </div>
+      </div>
+
+      <!-- My Trips: the vault + deadline tracker (renders in the results panel) -->
+      <div id="mode-trips" class="mode hidden">
+        <div class="rights-intro">
+          <p><strong>Your trips, your deadlines.</strong> Claims expire — that’s how airlines keep the money. Save a trip and the app counts down every window for you.</p>
+        </div>
+        <button id="trip-add-btn" class="primary">＋ Add a trip</button>
+        <p class="hint" style="margin-top:10px">Stored only on this device. No account, no server, nothing shared.</p>
       </div>
 
       <div class="watchlist">
@@ -168,7 +194,7 @@
       <div id="trend" class="trend hidden"></div>
       <div id="results">
         <div class="intro">
-          <div class="big">✈️🗺️</div>
+          <button id="crisis-btn" class="crisis-btn">At the airport with a problem <em>right now</em>? Tap here.</button>
           <h2>Where would you like to go?</h2>
           <p>Pick your dates on the left and press <strong>“Show me the deals.”</strong> You’ll see
             every place Delta can take you out of Helena — and how much your companion ticket saves
@@ -191,7 +217,7 @@
           (<code>L/U/T/X/V</code>); Reserve adds <code>W/S</code> Comfort+, <code>A/G</code> Premium
           Select, and <code>I/Z</code> First. Delta One and Basic Economy are never eligible. (The
           Gold card has no companion certificate.)</p>
-        <p class="caveat">⚠ <strong>Booking class is the catch.</strong> The certificate only tickets
+        <p class="caveat"> <strong>Booking class is the catch.</strong> The certificate only tickets
           if the flight has open inventory in an eligible class. The keyless <strong>Google Flights</strong>
           source shows real prices but <em>not</em> the booking class — so eligibility shows as
           “Confirm on Delta.” Add Amadeus keys (precise fare-class mode) to turn that into a firm
@@ -228,6 +254,16 @@ AMADEUS_ENV=test</pre></li>
   <script src="/airlines.js"></script>
   <script src="/claim-engine.js"></script>
   <script src="/viral.js"></script>
+  <script src="/money-data.js"></script>
+  <script src="/trips.js"></script>
+  <script src="/claimtrack.js"></script>
+  <script src="/coc-data.js"></script>
+  <script src="/scorecard-data.js"></script>
+  <script src="/faredrop-data.js"></script>
+  <script src="/buycheck.js"></script>
+  <script src="/fareclass.js"></script>
+  <script src="/crisis.js"></script>
+  <script src="/coverage.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

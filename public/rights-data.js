@@ -67,9 +67,9 @@ window.RIGHTS_DATA = {
     },
     {
       category: "refunds",
-      headline: "One narrow late-2025 exception — and it does NOT shrink your refund rights",
-      plain: "As of December 5, 2025, DOT is briefly NOT enforcing the refund rule in just ONE narrow case: when an airline simply gives your flight a new flight number but everything else stays the same — same times, same airports, no real change — and you're rebooked on it. A pure paperwork renumber with no impact on your trip won't trigger an automatic refund during this pause (which runs through June 30, 2026). Everything else is untouched: real cancellations, the 3hr/6hr thresholds, the cash-refund rules, and the 24-hour rule all still apply in full.",
-      amounts: "Enforcement pause Dec 5, 2025 through June 30, 2026 — limited to renumbered flights with no significant change or delay.",
+      headline: "One narrow exception — and it does NOT shrink your refund rights",
+      plain: "Since December 5, 2025, DOT has paused enforcement of the refund rule in just ONE narrow case: when an airline simply gives your flight a new flight number but everything else stays the same — same times, same airports, no real change — and you're rebooked on it. A pure paperwork renumber with no impact on your trip won't trigger an automatic refund during this pause (extended in July 2026 to run through July 7, 2027). Everything else is untouched: real cancellations, the 3hr/6hr thresholds, the cash-refund rules, and the 24-hour rule all still apply in full.",
+      amounts: "Enforcement pause since Dec 5, 2025, extended through July 7, 2027 — limited to renumbered flights with no significant change or delay.",
       triggers: "ONLY a renumbered flight you're rebooked on with no significant change or delay. If the new flight crosses a significant-change line or is truly cancelled, your full refund rights remain.",
       howToClaim: "If your trip actually changed in a real way (time, airport, connections, cabin) despite the new number, you still qualify — assert your refund right under 14 CFR 260.6/260.10.",
       legalBasis: "DOT enforcement notice, Federal Register doc 2025-22140 (Dec 5, 2025); docket DOT-OST-2025-2285.",
@@ -158,7 +158,7 @@ window.RIGHTS_DATA = {
       category: "delays",
       headline: "The DOT Dashboard shows what each airline promised for delays they caused",
       plain: "DOT's free Airline Customer Service Dashboard is a chart of what each big U.S. airline has officially promised when a delay or cancellation is the airline's OWN fault (staffing, maintenance, fueling — NOT weather or air-traffic control). The usual promises: rebook you on the same airline at no extra cost; a meal or meal voucher once you've waited 3+ hours; and, if you're stuck overnight, a hotel plus a ride to and from it. Use it to know what to demand at the gate — and to prove a broken promise later. All 10 big carriers promise same-airline rebooking and the 3-hour meal; Frontier is the only one that hasn't committed to overnight hotel and ground transport.",
-      amounts: "Meal/voucher: after a 3+ hour wait for the new flight. Rebooking: no extra cost on the same airline. Hotel + ground transport: for overnight controllable disruptions (all 10 carriers except Frontier).",
+      amounts: "Meal/voucher: after a 3+ hour wait for the new flight. Rebooking: no extra cost on the same airline. Hotel + ground transport: for overnight controllable disruptions (all 10 big carriers except Frontier).",
       triggers: "A 'controllable' cancellation or delay — within the airline's control (crew, maintenance, fueling, cleaning). Weather and air-traffic control don't count.",
       howToClaim: "Check the dashboard for your airline's promises, then ask directly for rebooking, the meal voucher (after 3 hours), and hotel/ground transport. If they refuse a promise marked with a green check, file a DOT complaint and cite the dashboard.",
       legalBasis: "Customer-service-plan commitments enforced under 14 CFR Part 259 and 49 U.S.C. 41712.",
@@ -253,6 +253,20 @@ window.RIGHTS_DATA = {
       sources: [
         { label: "eCFR — 16 CFR Part 464", url: "https://www.ecfr.gov/current/title-16/chapter-I/subchapter-D/part-464" },
         { label: "FTC — fees rule FAQ", url: "https://www.ftc.gov/business-guidance/resources/rule-unfair-or-deceptive-fees-frequently-asked-questions" }
+      ]
+    },
+    {
+      category: "disability",
+      headline: "Bulkhead, extra legroom, a movable armrest, or a seat next to your helper — free, on request",
+      plain: "If you have a disability, the airline must give you specific seats at no charge, on request: a row with a movable aisle armrest if you board by aisle chair; a bulkhead or other extra-legroom seat if you have a fused or immobilized leg; a bulkhead seat (or not, your choice) if you fly with a service animal; and an adjoining seat for a personal care attendant, reader, interpreter, or a safety assistant the airline itself requires. These are the seats airlines otherwise sell as \"preferred\" or \"extra legroom\" — the rule bars them from charging you for a required accommodation. What it does not do: hand you a seat in a higher class than you bought, or override FAA exit-row rules.",
+      amounts: "No charge for the required seat (14 CFR 382.31). The airline may still charge for extras the rule doesn’t require.",
+      triggers: "You self-identify as having one of the listed disabilities and ask. Ask when you book (24+ hours ahead is safest); the airline can ask you to check in an hour before the standard time.",
+      howToClaim: "Request the specific accommodation when booking or by calling the airline's accessibility line, and say which paragraph applies (\"382.81(d), fused leg, bulkhead or extra legroom\"). Get it noted on the reservation. If they charge you or refuse, file the disability complaint — they owe a written answer in 30 days — and then DOT.",
+      legalBasis: "14 CFR 382.81 (required seating accommodations); 382.85 (advance request / priority seating); 382.87 (no exclusion from seats except FAA safety rules; not required to give a higher class); 382.31 (no charge for required accommodations).",
+      sources: [
+        { label: "Cornell LII — 14 CFR 382.81", url: "https://www.law.cornell.edu/cfr/text/14/382.81" },
+        { label: "Cornell LII — 14 CFR 382.31", url: "https://www.law.cornell.edu/cfr/text/14/382.31" },
+        { label: "Cornell LII — 14 CFR 382.87", url: "https://www.law.cornell.edu/cfr/text/14/382.87" }
       ]
     },
     {
@@ -404,14 +418,14 @@ window.RIGHTS_DATA = {
   statsLinks: [
     { label: "DOT Air Travel Consumer Reports", note: "Monthly complaint rates, mishandled bags, and cancellations by airline.", url: "https://www.transportation.gov/airconsumer/air-travel-consumer-reports" },
     { label: "BTS On-Time Performance", note: "Bureau of Transportation Statistics — which airlines and routes are late, and how late. Raw data.", url: "https://www.transtats.bts.gov/" },
-    { label: "Skytrax Airline Reviews", note: "Independent passenger ratings, the most-cited airline review site.", url: "https://www.airlinequality.com/airline-reviews/delta-air-lines/" },
+    { label: "Skytrax Airline Reviews", note: "Independent passenger ratings, the most-cited airline review site.", url: "https://www.airlinequality.com/" },
     { label: "J.D. Power Airline Satisfaction", note: "Annual survey ranking every major U.S. airline on service and value.", url: "https://www.jdpower.com/business/travel/us-airline-satisfaction-study" }
   ],
 
   // ---- Leave a review / document a bad experience ----
   reviewLinks: [
-    { label: "Skytrax", note: "Verified traveler reviews; your review counts toward the airline's global rating.", url: "https://www.airlinequality.com/airline-reviews/delta-air-lines/" },
-    { label: "ConsumerAffairs", note: "Good for documenting a pattern — late refunds, bad service, misleading fees.", url: "https://www.consumeraffairs.com/travel/delta.html" },
-    { label: "Google Maps", note: "Search the airline's name on Google Maps to leave a highly-visible review.", url: "https://www.google.com/maps/search/Delta+Air+Lines" }
+    { label: "Skytrax", note: "Verified traveler reviews; your review counts toward the airline's global rating.", url: "https://www.airlinequality.com/" },
+    { label: "ConsumerAffairs", note: "Good for documenting a pattern — late refunds, bad service, misleading fees.", url: "https://www.consumeraffairs.com/travel/" },
+    { label: "Google Maps", note: "Search the airline's name on Google Maps to leave a highly-visible review.", url: "https://www.google.com/maps" }
   ]
 };
