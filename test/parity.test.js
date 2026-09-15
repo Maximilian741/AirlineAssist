@@ -257,3 +257,15 @@ test('FARECLASS: invalid inputs behave identically', () => {
     assert.ok(mobCoc.COC_FULL.length >= 9, 'all airlines present');
   });
 }
+
+// ---------------------------------------------------------------- schedule-change lever (web ⇄ mobile)
+{
+  const schSandbox = { window: {} };
+  vm.createContext(schSandbox);
+  vm.runInContext(readFileSync(path.join(__dirname, '..', 'public', 'coc-data.js'), 'utf8'), schSandbox);
+  const mobSch = await import('../mobile/src/data/coc-full.ts');
+  test('SCHEDULE LEVER parity: the federal floor, tactics and sources are identical on both platforms', () => {
+    assert.deepEqual(j(mobSch.COC_SCHEDULE), j(schSandbox.window.COC_DATA.schedule));
+    assert.ok(mobSch.COC_SCHEDULE.tactics.length >= 9, 'all tactics present');
+  });
+}

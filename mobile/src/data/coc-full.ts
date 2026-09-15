@@ -977,3 +977,117 @@ export const COC_FULL: CocAirline[] = [
     "confidence": "high"
   }
 ];
+
+// What a silent schedule change unlocks: the federal floor (14 CFR 260) plus the tactics that work.
+export type ScheduleTactic = { name: string; how: string; worth: string; risk: string };
+export type ScheduleLeverage = {
+  whatItIs: string;
+  dotBaseline: string;
+  whyItWorks: string;
+  tactics: ScheduleTactic[];
+  sources: { label: string; url: string }[];
+};
+
+export const COC_SCHEDULE: ScheduleLeverage = {
+  "whatItIs": "A \"schedule change\" is any change the AIRLINE makes to your flight after you've paid — a shifted departure time, a swapped aircraft, a new connection, a re-timed return, a moved airport, or a cancelled-and-rebooked flight. It is not a delay on the day of travel; it happens weeks or months out, silently, by email or app notification that most people skim and ignore. It is also extremely common. Airlines load schedules up to ~330 days out but only firm them up as departure approaches, re-publishing schedules on a near-weekly cadence; frequent flyers who book far in advance report that the large majority of long-lead bookings pick up at least one schedule change before they fly. The further…",
+  "dotBaseline": "Since October 2024, 14 CFR Part 260 (DOT's \"Refunds and Other Consumer Protections\" final rule) makes this a federal entitlement, not a courtesy. The operative term is \"significantly delayed or changed flight\" (14 CFR 260.2). Verbatim, it means a covered flight itinerary with a carrier-made delay or change where, as a result:\n(1) you are scheduled to depart the origination airport 3+ hours (domestic) / 6+ hours (international) EARLIER than originally scheduled;\n(2) you are scheduled to arrive at the destination 3+ hours (domestic) / 6+ hours (international) LATER than originally scheduled;\n(3) you are scheduled to depart from a different origination airport or arrive at a different…",
+  "whyItWorks": "Airlines routinely grant far more than 14 CFR Part 260 requires, for three structural reasons. First, published policy already exceeds the federal floor at most carriers, because refunding you is worse for them than moving you. Alaska is the most generous in the industry: a schedule change of as little as 60 minutes lets you take a full cash refund to original form of payment OR rebook to a flight departing up to one day earlier or later — three hours better than the DOT floor. United's published policy lets you self-serve a free rebooking when your time moves by more than 30 minutes (same city pair, within 24 hours). Delta's agency-facing rebooking policy triggers at 120 minutes, not 180,…",
+  "tactics": [
+    {
+      "name": "Do nothing — let the schedule change come to you",
+      "how": "If you booked far out and think you might want to move the flight, DO NOT pay a change fee or eat a fare difference immediately. Check the reservation every 2-3 weeks in the app or on the airline site (compare the current times against your original confirmation email — this is why you keep it). Airlines republish schedules constantly; a long-lead booking is likelier than not to move at some point. The instant it does, your change becomes free or cheap.",
+      "worth": "The entire fare difference plus any change fee. On a re-booked domestic ticket this is commonly $150-$400; on international premium cabins it can be four figures. Costs nothing but patience.",
+      "risk": "Pure waiting game — the change may never come, or may come too late to be useful, or may be 45 minutes when you needed 3 hours. Do not rely on it for travel you must move by a hard deadline. Only works if you actually check; the notification email is easy to miss and some changes are pushed with no meaningful alert."
+    },
+    {
+      "name": "Trade the change for a better flight the same day",
+      "how": "When the change lands, first go find the flight you actually want on Google Flights or the airline's own search — ignore the price shown, you are not buying it. Then self-serve if the app offers alternatives (United and Delta both surface a 'find another flight' option after a change), and call only if the app won't show the flight you want. Ask by flight number: 'Your schedule change moved me from the 8:10am to the 11:45am. That doesn't work. Please protect me on flight 1422 at 6:30pm instead.'",
+      "worth": "Free move to a materially better itinerary — a nonstop instead of a connection, a civilized departure time, a longer or shorter connection. Frequently several hundred dollars of fare difference waived.",
+      "risk": "Policy, not law. Firm at United above 30 minutes and Delta above 120 minutes on the same city pair; discretionary elsewhere, especially if the flight you want is in a much higher fare bucket. Expect resistance if you're jumping to a peak-demand flight."
+    },
+    {
+      "name": "Push the date, not just the time",
+      "how": "Ask explicitly for a different DAY, and name the carrier's own window rather than asking open-endedly. Alaska: 'Please move me to one day earlier/later, per your schedule change policy.' Delta: 'Your schedule change policy allows rebooking within two days of the original date — please put me on the flight two days later.' American and JetBlue have comparable windows (JetBlue up to 5 days). Ask for the return leg to be adjusted at the same time — Delta's own agency policy directs agents to move the return to protect the original trip length.",
+      "worth": "A free date change is the single highest-dollar outcome here, because date changes are what airlines normally charge the most for. Turning a Tuesday return into a Thursday return at no cost is routinely worth $300-$800.",
+      "risk": "Windows are narrow (±1 to ±2 days at most carriers) and some are conditioned on timing — Delta's ±2-day agency window applies when the change occurs 7+ days before departure. Asking for a week's shift will get a flat no and can make the agent defensive about the whole request. Ask inside the window and you're asking them to do something they're already authorized to do."
+    },
+    {
+      "name": "Change the airport",
+      "how": "Ask for a co-terminal or nearby-airport substitution: EWR instead of JFK/LGA, MDW instead of ORD, OAK/SJC instead of SFO, BWI instead of DCA/IAD. The magic phrase for Delta is the 100-mile radius: 'Your reaccommodation policy permits alternates within a 100-mile radius of the original origin and destination — please rebook me out of [airport].' Other carriers have similar but less publicly documented latitude.",
+      "worth": "Can be worth more than the fare itself if it saves a long ground transfer, a hotel night, or parking. Also the cleanest way to get onto a nonstop.",
+      "risk": "The most discretionary item on this list and the most agent-dependent. Delta has it in writing for agents; at other carriers you are asking for a favor. Note the reverse direction is a firm right: if the AIRLINE moves you to a different airport, that is criterion (3) of the federal definition and you can refuse and demand a cash refund outright."
+    },
+    {
+      "name": "Take cash back on a nonrefundable ticket",
+      "how": "If the change hits any federal trigger — 3h domestic / 6h international, different airport, an added connection, or a downgrade — do not accept the rebooking. State the trigger and the regulation: 'This is a significant change under 14 CFR Part 260. I am declining the rebooking and requesting a refund to my original form of payment, not an eCredit.' If the flight is already auto-rebooked in your record, say explicitly that you never affirmatively accepted it. Route it through the airline's Refunds department if the phone agent balks.",
+      "worth": "100% of the fare plus taxes plus ancillary fees — seats, bags, pets — on a ticket that was worth nothing in cash the day before. On a nonrefundable or Basic Economy fare this is the whole ticket price back.",
+      "risk": "This is a firm legal right, not a favor — but you must decline the alternative to get it, and you must say 'original form of payment.' The most common failure mode is being handed a voucher: 14 CFR 260.7 says a voucher cannot be deemed accepted without your affirmative agreement, so refusing it is not a negotiation, it's the rule. Beware airlines computing the delay wrong (comparing the wrong legs, or only the changed segment rather than the total itinerary shift) — do the arithmetic yourself, original scheduled arrival vs new scheduled arrival."
+    },
+    {
+      "name": "Refuse the auto-rebooking before you touch anything",
+      "how": "When the email or app push arrives, do not click the confirm/accept button while you decide. Read what actually changed, compute the delta against your original confirmation, then decide between (a) a free move to something better and (b) cash back. Only then respond. If you already clicked accept, call and say you want to revert to the original entitlement — often granted, but you are now asking rather than entitled.",
+      "worth": "It is the precondition for every other tactic. Free option value on the entire ticket.",
+      "risk": "Minimal, but time-bounded — the refund entitlement under 260.6 runs to the scheduled departure date, and inventory on the flight you actually want evaporates. Don't sit on it for weeks."
+    },
+    {
+      "name": "Collect on a downgrade or a lost nonstop",
+      "how": "Two triggers people almost never claim. If an aircraft swap drops you from a lie-flat/first/premium cabin into a lower one, that is criterion (5) — a significant change — and you can refuse the itinerary entirely for a full refund, or press for the fare difference plus a better routing. If your nonstop becomes a connection, that is criterion (4), added connection points; American treats nonstop-to-connecting as significant on its face regardless of the time delta. Say the words: 'This adds a connection point / downgrades my class of service, which is a significant change under Part 260.'",
+      "worth": "Cabin downgrades on international premium tickets are the largest single-item recovery in this whole area — often $1,000-$5,000 of value. The nonstop-to-connecting trigger is valuable because it has NO time threshold: a 20-minute change that adds a stop still qualifies.",
+      "risk": "Firm on the refuse-and-refund side. The fare-difference-refund-and-still-fly outcome is negotiated, not guaranteed by Part 260, so decide in advance whether you'd rather have the money or the trip. Downgrade claims are also where airlines most often try to route you to a voucher."
+    },
+    {
+      "name": "Pick the channel deliberately, then hang up and call again",
+      "how": "App/web self-service first — it is free, instant, and never argues; United and Delta both expose alternative flights after a change, and Alaska now lets you take the cash refund online. Escalate to phone only when the flight you want isn't offered online. On the phone, open with the specific flight number you want, not an open question. If refused, thank the agent, hang up, and call back — the widely-documented pattern is that the same request gets different answers from different agents, and people are routinely told no twice and yes on the third call. For a denied refund, escalate in writing to the carrier's Passenger Refunds department with your delta arithmetic spelled out, then file a DOT Aviation Consumer Protection complaint. Treat a credit card chargeback as a genuine last resort…",
+      "worth": "Converts a coin-flip into a near-certainty on anything inside policy. The DOT complaint is the real backstop on the legal-right items and carriers respond to it.",
+      "risk": "Repeated calling costs time and works only where the agent has discretion — it will not manufacture a right that doesn't exist, and on a 90-minute change with no other trigger you are simply asking nicely. Be pleasant and concrete; agents extend more latitude to callers who name a specific flight and a specific policy than to callers who are angry or vague."
+    },
+    {
+      "name": "Know when you have nothing",
+      "how": "Before you call, check whether the change actually clears a line. Under 3 hours domestic / 6 hours international, same airports, same number of connections, same cabin — the federal refund right does not exist and you are relying entirely on the carrier's own lower thresholds (Alaska 60 min, United 30 min, Delta 120 min, AA's change-fee waiver under 4 hours) or on goodwill. Airlines are aware of the thresholds and changes landing at 2h55m are not accidental.",
+      "worth": "Saves you from burning credibility on an unwinnable ask, and tells you which carrier's lower threshold to invoke by name.",
+      "risk": "None — this is the calibration step. The honest summary: the CASH REFUND on a qualifying significant change is a firm federal right you can insist on and complain about. Everything else — a specific better flight, a different day, a different airport, keeping the ticket AND getting money back — is airline policy plus the individual agent, and should be asked for as such."
+    }
+  ],
+  "sources": [
+    {
+      "label": "14 CFR 260.2 — definition of \"significantly delayed or changed flight\" (Cornell LII)",
+      "url": "https://www.law.cornell.edu/cfr/text/14/260.2"
+    },
+    {
+      "label": "14 CFR 260.6 — refunding fares for cancelled, delayed or changed flights (Cornell LII)",
+      "url": "https://www.law.cornell.edu/cfr/text/14/260.6"
+    },
+    {
+      "label": "14 CFR 260.7 — affirmative acceptance required before a voucher replaces a refund (Cornell LII)",
+      "url": "https://www.law.cornell.edu/cfr/text/14/260.7"
+    },
+    {
+      "label": "14 CFR Part 260 — full rule, Refunds for Airline Fare and Ancillary Service Fees (eCFR)",
+      "url": "https://www.ecfr.gov/current/title-14/chapter-II/subchapter-A/part-260"
+    },
+    {
+      "label": "DOT final rule, \"Refunds and Other Consumer Protections\" (Federal Register, 26 Apr 2024)",
+      "url": "https://www.federalregister.gov/documents/2024/04/26/2024-07177/refunds-and-other-consumer-protections"
+    },
+    {
+      "label": "DOT — Biden-Harris Administration Announces Final Rule Requiring Automatic Refunds",
+      "url": "https://www.transportation.gov/briefing-room/biden-harris-administration-announces-final-rule-requiring-automatic-refunds-airline"
+    },
+    {
+      "label": "DOT enforcement discretion on renumbered flights, extended to 7 Jul 2027 (Federal Register, 7 Jul 2026)",
+      "url": "https://www.federalregister.gov/documents/2026/07/07/2026-13675/airline-refunds-and-other-consumer-protections"
+    },
+    {
+      "label": "DOT enforcement pause, original notice (Federal Register, 5 Dec 2025)",
+      "url": "https://www.federalregister.gov/documents/2025/12/05/2025-22140/airline-refunds-and-other-consumer-protections"
+    },
+    {
+      "label": "Eckert Seamans — DOT Pauses Enforcement of Certain Refund Obligations (scope of the pause)",
+      "url": "https://www.eckertseamans.com/stay-informed/blogs/aviation/dot-pauses-enforcement-of-certain-refund-obligations"
+    },
+    {
+      "label": "DOT Aviation Consumer Protection — Refunds",
+      "url": "https://www.transportation.gov/individuals/aviation-consumer-protection/refunds"
+    }
+  ]
+};

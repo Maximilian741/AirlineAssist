@@ -4,6 +4,8 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BuyCheckSection } from '@/components/buy-check';
+import { FareClassDecoder } from '@/components/fare-class-decoder';
+import { ScheduleLever } from '@/components/schedule-lever';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
@@ -31,6 +33,10 @@ export default function MovesScreen() {
 
         <BuyCheckSection theme={theme} />
 
+        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🔁 When they move your flight</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>A schedule change you didn’t ask for can be worth a free rebooking — or your money back, even on a nonrefundable ticket.</ThemedText>
+        <ScheduleLever />
+
         <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🃏 The playbook</ThemedText>
         {MOVES.map((m) => (
           <MoveCard key={m.id} m={m} theme={theme} />
@@ -45,6 +51,10 @@ export default function MovesScreen() {
         {FEES.map((f) => (
           <FeeCard key={f.iata} f={f} theme={theme} />
         ))}
+
+        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🎟️ Decode the letter on your ticket</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>One letter decides whether your companion certificate works.</ThemedText>
+        <FareClassDecoder />
 
         <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">💳 Money you already have</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>Most people never claim the trip insurance built into their credit card. Check yours.</ThemedText>

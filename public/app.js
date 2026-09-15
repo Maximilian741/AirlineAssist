@@ -1386,7 +1386,7 @@ function fareClassHtml() {
     <h3 class="rights-h">Decode the letter on your ticket</h3>
     <p class="rights-sub">Every ticket has a one-letter booking class. It decides whether your companion certificate works, whether you can upgrade, and whether you can change your flight — and two people in neighbouring seats can hold completely different rights. Find it on your confirmation (often labelled “Class” or “Fare class”).</p>
     <div class="mm-grid fc-grid">
-      <label>Your booking class<input id="fc-code" maxlength="1" placeholder="e.g. T" autocomplete="off" /></label>
+      <label>Your booking class<input id="fc-code" placeholder="e.g. T" autocomplete="off" autocapitalize="characters" /></label>
       <label>Your card<select id="fc-tier">
         <option value="platinum">Platinum</option>
         <option value="reserve">Reserve</option>
@@ -1428,7 +1428,13 @@ function wireFareClass() {
       </div>
       ${eligibleListHtml(tier)}`;
   };
-  input.addEventListener('input', run);
+  // Typing over an existing letter replaces it: keep only the last letter entered.
+  input.addEventListener('input', () => {
+    const last = input.value.replace(/[^a-zA-Z]/g, '').slice(-1).toUpperCase();
+    if (input.value !== last) input.value = last;
+    run();
+  });
+  input.addEventListener('focus', () => input.select());
   $('#fc-tier').addEventListener('change', run);
   run();
 }
