@@ -132,13 +132,13 @@ export function deadlines(trip: Trip): Deadline[] {
       '14 CFR Part 260');
   }
 
-  if (trip.issue === 'bumped') {
+  if (trip.issue === 'bumped' && ['us', 'intl_from_us'].includes(trip.region || 'us')) {
     push('db', 'Denied-boarding cash claim', addDays(issueDate, 30),
       'Involuntary bumping pays cash (up to $1,075 / $2,150) — it should have been paid at the airport. Chase it now while records are fresh.',
       '14 CFR 250.5 & 250.8');
   }
 
-  if (trip.issue === 'cancelled' || trip.issue === 'schedule' || trip.issue === 'downgrade' || trip.issue === 'extra') {
+  if (trip.issue === 'cancelled' || trip.issue === 'schedule' || trip.issue === 'extra') {
     push('refund', 'Airline must pay your refund by', addDays(issueDate, paidCard ? 10 : 20),
       paidCard
         ? 'Credit-card refunds are due within 7 BUSINESS days of your request. Past this, it is its own violation — report it.'

@@ -77,6 +77,19 @@ window.ClaimEngine = (function () {
       },
     },
     {
+      id: 'downgradeFlew',
+      when: (a) => a.type === 'downgrade',
+      q: {
+        title: 'Did you fly the lower cabin?',
+        help: 'If you refused the downgraded flight, U.S. rules give you a full refund. If you flew it, the fare difference depends on your airline’s contract.',
+        kind: 'choice',
+        options: [
+          { value: 'no', label: 'No — I refused the downgraded flight' },
+          { value: 'yes', label: 'Yes — I flew in the lower cabin' },
+        ],
+      },
+    },
+    {
       id: 'schedDelta',
       when: (a) => a.type === 'schedule',
       q: {
@@ -152,9 +165,22 @@ window.ClaimEngine = (function () {
       },
     },
     {
+      id: 'bumpOrigin',
+      when: (a) => a.type === 'bumped' && a.voluntary === 'no' && a.region === 'canada',
+      q: {
+        title: 'Where did that flight depart from?',
+        help: 'U.S. bumping cash applies only to flights leaving a U.S. airport. Canada’s rules cover flights in both directions.',
+        kind: 'choice',
+        options: [
+          { value: 'us', label: 'A U.S. airport (flying to Canada)' },
+          { value: 'canada', label: 'A Canadian airport' },
+        ],
+      },
+    },
+    {
       id: 'fareOneWay',
-      when: (a) => a.type === 'bumped' && a.voluntary === 'no',
-      q: { title: 'What did your one-way ticket cost?', help: 'Just your fare, one direction. A rough number is fine.', kind: 'money' },
+      when: (a) => a.type === 'bumped' && a.voluntary === 'no' && bumpFromUs(a),
+      q: { title: 'What did your one-way ticket cost?', help: 'The exact one-way fare from your receipt or confirmation. The payment is a multiple of it, so a guess changes what you ask for.', kind: 'money' },
     },
     {
       id: 'arrDelay',
@@ -205,7 +231,7 @@ window.ClaimEngine = (function () {
     },
     {
       id: 'payment',
-      when: (a) => a.type === 'extra' || a.type === 'downgrade' || a.type === 'bag_late' || (a.type === 'cancelled' && a.traveled === 'no') || (a.type === 'schedule' && a.schedAccepted === 'no'),
+      when: (a) => a.type === 'extra' || (a.type === 'downgrade' && a.downgradeFlew === 'no') || a.type === 'bag_late' || (a.type === 'cancelled' && a.traveled === 'no') || (a.type === 'schedule' && a.schedAccepted === 'no'),
       q: {
         title: 'How did you pay?',
         help: 'This sets how fast they must refund you.',
@@ -232,10 +258,32 @@ window.ClaimEngine = (function () {
 
   // ---- amount helpers ----
   const euAmount = (band) => (band === 'long' ? 600 : band === 'medium' ? 400 : 250);
-  const ukAmount = (band, delay) => (band === 'long' ? (delay === '3-4' ? 260 : 520) : band === 'medium' ? 350 : 220);
+  const ukAmount = (band) => (band === 'long' ? 520 : band === 'medium' ? 350 : 220);
+  // Art. 7(2): the airline MAY halve EU/UK compensation when you reach your destination no more than 2h (short),
+  // 3h (medium) or 4h (long) after the original arrival. For a plain delay the 3-hour floor leaves only long-haul
+  // 3–4h (Sturgeon C-402/07 para 63). The full figure stays the demand; the possible cut is shown beside it.
+  const HALVABLE = { short: ['<1', '1-2'], medium: ['<1', '1-2', '2-3'], long: ['<1', '1-2', '2-3', '3-4'] };
+  const HALF_HOURS = { short: 2, medium: 3, long: 4 };
+  function euUkAmountText(eu, band, arrived) {
+    const full = eu ? euAmount(band) : ukAmount(band);
+    const cur = eu ? '€' : '£';
+    const text = cur + full + ' per person, in cash';
+    return (HALVABLE[band] || []).includes(arrived)
+      ? text + ` (the airline may pay ${cur}${full / 2} instead, because you arrived within ${HALF_HOURS[band]} hours of your original time — Art. 7(2))`
+      : text;
+  }
+  function halvingNote(eu, band) {
+    const full = eu ? euAmount(band) : ukAmount(band);
+    return ` If the flight you ended up on arrived no more than ${HALF_HOURS[band]} hours after your original arrival time, the airline may pay half (${eu ? '€' : '£'}${full / 2}) — Art. 7(2).`;
+  }
   const apprAmount = (delay) => (delay === '9+' ? 1000 : delay === '6-9' ? 700 : 400); // large airline delay, 3–6/6–9/9+
   const apprDeniedBoarding = (d) => (d === '9+' ? 2400 : d === '6-9' ? 1800 : d ? 900 : null); // 900/1,800/2,400 by delay
   const delayAtLeast3 = (d) => ['3-4', '4-6', '6-9', '9+'].includes(d);
+
+  // 14 CFR 250.2: U.S. bumping compensation covers only nonstop segments that depart a U.S. airport.
+  function bumpFromUs(a) {
+    return a.region === 'us' || a.region === 'intl_from_us' || (a.region === 'canada' && a.bumpOrigin === 'us');
+  }
 
   function bumpResult(region, band, fare) {
     const intl = region !== 'us';
@@ -354,7 +402,7 @@ window.ClaimEngine = (function () {
           ruleUrl: URL.bump,
           deadline: '',
         });
-      } else {
+      } else if (bumpFromUs(a)) {
         const r = bumpResult(region, a.arrDelay, Number(a.fareOneWay) || 0);
         if (r.pct === 0) {
           E.push({
@@ -371,14 +419,25 @@ window.ClaimEngine = (function () {
             strength: 'strong',
             title: 'Cash for being forced off an oversold flight',
             amountText: r.amt != null
-              ? usd(r.amt) + ` (${r.pct}% of your one-way fare, capped at ${usd(r.cap)})`
+              ? usd(r.amt) + ` (${r.pct}% of the ${usd(Number(a.fareOneWay))} one-way fare you entered, capped at ${usd(r.cap)})`
               : `${r.pct}% of your one-way fare, up to ${usd(r.cap)}`,
             detail: 'This is the ' + r.pct + '% tier. They must pay in CASH or a check — you do not have to accept a voucher. Insist on the check at the gate.',
+            condition: 'on an aircraft with 30+ seats, if you checked in and reached the gate on time',
             rule: '14 CFR 250.5 & 250.8',
             ruleUrl: URL.bump,
             deadline: 'Paid the same day at the airport (or mailed within 24 hours).',
           });
         }
+      } else {
+        E.push({
+          strength: 'info',
+          title: 'U.S. bumping cash doesn’t cover this flight',
+          amountText: '—',
+          detail: 'The U.S. rule that pays 200–400% of your fare in cash applies only to flights departing a U.S. airport. For this flight, the compensation below is what applies.',
+          rule: '14 CFR 250.2',
+          ruleUrl: URL.bump,
+          deadline: '',
+        });
       }
       addIntlComp(E, a, 'denied_boarding');
     }
@@ -425,15 +484,30 @@ window.ClaimEngine = (function () {
     }
 
     if (a.type === 'downgrade') {
-      E.push({
-        strength: 'strong',
-        title: 'Refund of the fare difference',
-        amountText: 'The difference between what you paid and the lower cabin',
-        detail: 'A downgrade to a lower class is a “significant change.” You’re owed the difference back (and can refuse the whole trip for a full refund).',
-        rule: '14 CFR Part 260 / 260.2',
-        ruleUrl: URL.refund,
-        deadline: 'They must pay ' + refundDeadline + '.',
-      });
+      if (a.downgradeFlew === 'no') {
+        const usTouching = region === 'us' || region === 'intl_from_us';
+        E.push({
+          strength: usTouching ? 'strong' : 'conditional',
+          title: 'A full cash refund of your fare',
+          amountText: '100% of what you paid — fare, taxes, and any add-on fees',
+          detail: 'Being downgraded to a lower class is a “significant change” under the federal refund rule. Because you refused the downgraded flight, the airline must refund you to your original form of payment — not a voucher.' + (usTouching ? '' : ' The U.S. rule covers flights to, from or within the United States.'),
+          ...(usTouching ? {} : { condition: 'under U.S. law only if the trip starts or ends in the United States (14 CFR 260.2 “covered flight”)' }),
+          rule: '14 CFR 260.2 & 260.6',
+          ruleUrl: URL.refund,
+          deadline: 'They must pay ' + refundDeadline + '.',
+        });
+      } else {
+        E.push({
+          strength: 'conditional',
+          title: 'The fare difference, under your airline’s contract',
+          amountText: 'The difference between what you paid and the cabin you flew',
+          condition: 'if your airline’s contract of carriage provides it',
+          detail: 'Flying the downgraded seat ends the federal full-refund right, which applied only if you refused the flight. Some contracts still pay it — American refunds the fare difference, United a set share of the fare — so check yours in the contract decoder and ask for it in writing.',
+          rule: 'Airline contract of carriage',
+          ruleUrl: '',
+          deadline: '',
+        });
+      }
       if (region === 'from_eu') {
         E.push({
           strength: 'conditional',
@@ -505,15 +579,14 @@ window.ClaimEngine = (function () {
     //  * a LATER arrival on the same flight is a DELAY (Sturgeon C-402/07): compensation only if you fly it and
     //    arrive 3h+ late; notice is irrelevant; declining gets you the refund (Art. 8, from 5h) but no cash;
     //  * an EARLIER departure of more than 1 hour is a CANCELLATION (Azurair C-146/20): compensation unless you
-    //    were told 14+ days ahead, or 7–13 days ahead with the move under 2h (Art. 5(1)(c)); no halving.
+    //    were told 14+ days ahead, or 7–13 days ahead with the move under 2h (Art. 5(1)(c)).
     //  * an added connection / airport change depends on the new times — shown as conditional on them.
     const eu = a.region === 'from_eu';
-    const amt = eu ? '€' + euAmount(band) : '£' + ukAmount(band, '9+');
     const rule = eu ? 'EU Regulation 261/2004' : 'UK261 (retained EC 261/2004)';
     const ruleUrl = eu ? URL.eu261 : URL.uk261;
     const deadline = eu ? 'Claim window varies by country (often 2–3 years).' : 'Generally up to 6 years to claim (England/Wales).';
     const extra = 'the airline cannot show extraordinary circumstances — a commercial schedule change normally is not one';
-    const push = (title, detail, condition) => E.push({ strength: 'conditional', title, amountText: amt + ' per person, in cash', detail, condition, rule, ruleUrl, deadline });
+    const push = (title, detail, condition, arrived) => E.push({ strength: 'conditional', title, amountText: euUkAmountText(eu, band, arrived), detail, condition, rule, ruleUrl, deadline });
   
     if (a.schedDelta === 'route') {
       push((eu ? 'EU261' : 'UK261') + ' cash compensation — depends on the new times',
@@ -534,8 +607,8 @@ window.ClaimEngine = (function () {
         return;
       }
       push((eu ? 'EU261' : 'UK261') + ' cash compensation — you arrive 3+ hours late',
-        'A schedule change that lands you 3+ hours later than originally scheduled is a compensable delay when you fly it (Sturgeon, C-402/07). Notice does not matter for delays, and the amount is not halved.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
-        'owed only if you fly it and actually arrive 3+ hours later than the original schedule, and ' + extra);
+        'A schedule change that lands you 3+ hours later than originally scheduled is a compensable delay when you fly it (Sturgeon, C-402/07). Notice does not matter for delays.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
+        'owed only if you fly it and actually arrive 3+ hours later than the original schedule, and ' + extra, a.schedDelta);
       return;
     }
     if (a.schedDirection === 'earlier') {
@@ -545,7 +618,7 @@ window.ClaimEngine = (function () {
       const moreThan2h = ['2-3', '3-4', '4-6', '6+'].includes(a.schedDelta);
       if (!(n === '<7' ? moreThan1h : moreThan2h)) return;
       push((eu ? 'EU261' : 'UK261') + ' cash compensation — an earlier departure counts as a cancellation',
-        'Bringing your flight forward by more than an hour is a cancellation in law (CJEU Azurair, C-146/20). With ' + (n === '<7' ? 'under 7 days’ notice' : '7–13 days’ notice and a move of 2+ hours') + ', compensation is due on top of the refund or rebooking — whether or not you take the earlier flight, and it is not halved.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
+        'Bringing your flight forward by more than an hour is a cancellation in law (CJEU Azurair, C-146/20). With ' + (n === '<7' ? 'under 7 days’ notice' : '7–13 days’ notice and a move of 2+ hours') + ', compensation is due on top of the refund or rebooking — whether or not you take the earlier flight.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : '') + halvingNote(eu, band),
         'owed only if ' + extra);
     }
   }
@@ -558,29 +631,32 @@ window.ClaimEngine = (function () {
     if (!qualifiesDelay) return;
     const cond =
       'You qualify only if the cause was within the airline’s control (mechanical, staffing, overbooking) — NOT extraordinary weather, ATC strikes, or security.';
-    const noticeNote = kind === 'cancellation' ? '; it may also be reduced if the airline gave 14+ days’ notice or rebooked you close to your original arrival time' : '';
-    const controlCondition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security' + noticeNote;
-    if (region === 'from_eu') {
+    if (region === 'from_eu' || region === 'from_uk') {
+      const eu = region === 'from_eu';
+      const b = band || 'long';
+      const anyAirline = eu ? ' Any flight leaving Europe counts — even on a U.S. airline.' : '';
+      let detail, condition;
+      if (kind === 'denied_boarding') {
+        // Art. 4(3): bumped against your will = compensation on the spot. The Art. 5(3) extraordinary-circumstances
+        // defence is not in Art. 4; only "reasonable grounds" (Art. 2(j)) take the right away.
+        detail = 'Being refused boarding against your will is compensated on the spot (Art. 4(3)). The “extraordinary circumstances” defence airlines use for delays and cancellations does not apply to bumping.' + anyAirline;
+        condition = 'owed unless they refused you on reasonable grounds — health, safety, security, or inadequate travel documents — and only if you checked in on time (Art. 2(j), 3(2))';
+      } else if (kind === 'cancellation') {
+        detail = cond + anyAirline + ' Nothing is owed if they told you 14+ days before departure, or rebooked you close to your original times — with 7–13 days’ notice, leaving no more than 2h early and arriving under 4h late; with under 7 days’ notice, no more than 1h early and under 2h late (Art. 5(1)(c)).' + halvingNote(eu, b);
+        condition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security — and they told you less than 14 days before departure without rebooking you close to your original times';
+      } else {
+        detail = cond + anyAirline;
+        condition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security';
+      }
       E.push({
         strength: 'conditional',
-        title: 'EU261 cash compensation',
-        amountText: '€' + euAmount(band || 'long') + ' per person, in cash',
-        detail: cond + ' Any flight leaving Europe counts — even on a U.S. airline.' + (kind === 'cancellation' ? ' (Reduced/waived if they gave 14+ days’ notice or rebooked you close to your original time.)' : ''),
-        condition: controlCondition,
-        rule: 'EU Regulation 261/2004',
-        ruleUrl: URL.eu261,
-        deadline: 'Claim window varies by country (often 2–3 years).',
-      });
-    } else if (region === 'from_uk') {
-      E.push({
-        strength: 'conditional',
-        title: 'UK261 cash compensation',
-        amountText: '£' + ukAmount(band || 'long', delay) + ' per person, in cash',
-        detail: cond + (kind === 'cancellation' ? ' (Reduced/waived if they gave 14+ days’ notice or rebooked you close to your original time.)' : ''),
-        condition: controlCondition,
-        rule: 'UK261 (retained EC 261/2004)',
-        ruleUrl: URL.uk261,
-        deadline: 'Generally up to 6 years to claim (England/Wales).',
+        title: (eu ? 'EU261' : 'UK261') + ' cash compensation',
+        amountText: euUkAmountText(eu, b, kind === 'cancellation' ? undefined : delay),
+        detail,
+        condition,
+        rule: eu ? 'EU Regulation 261/2004' : 'UK261 (retained EC 261/2004)',
+        ruleUrl: eu ? URL.eu261 : URL.uk261,
+        deadline: eu ? 'Claim window varies by country (often 2–3 years).' : 'Generally up to 6 years to claim (England/Wales).',
       });
     } else if (region === 'canada') {
       let amtText, dtl;
@@ -589,8 +665,13 @@ window.ClaimEngine = (function () {
         amtText = t != null ? 'CAD ' + t.toLocaleString('en-US') : 'CAD 900 / 1,800 / 2,400 (by how late you arrived)';
         dtl = 'Denied boarding pays CAD 900 (under 6h late), 1,800 (6–9h), or 2,400 (9h+).';
       } else if (kind === 'cancellation') {
-        amtText = 'CAD 400 / 700 / 1,000 (large airlines), by how late you ultimately arrived';
-        dtl = 'Cancellation pays CAD 400 (3–6h late), 700 (6–9h), or 1,000 (9h+) — the top tier if you didn’t travel.';
+        if (a.traveled === 'no') {
+          amtText = 'CAD 400 (large airline; CAD 125 small) — the fixed amount when your ticket is refunded';
+          dtl = 'Because you took the refund rather than flying, APPR fixes compensation at CAD 400 for a large airline or CAD 125 for a small one (s.19(2)), whatever the delay would have been.';
+        } else {
+          amtText = 'CAD 400 / 700 / 1,000 (large airlines; small airlines CAD 125 / 250 / 500), by how late you ultimately arrived';
+          dtl = 'Compensation depends on how late you finally arrived: CAD 400 (3–6h), 700 (6–9h) or 1,000 (9h+) on a large airline; 125 / 250 / 500 on a small one (s.19(1)).';
+        }
       } else {
         amtText = 'CAD ' + apprAmount(delay).toLocaleString('en-US');
         dtl = 'Large airlines pay CAD 400 (3–6h), 700 (6–9h), 1,000 (9h+).';
@@ -600,8 +681,10 @@ window.ClaimEngine = (function () {
         title: 'Canada APPR cash compensation',
         amountText: amtText + ', in cash',
         detail: cond + ' ' + dtl,
-        condition: 'owed only if the cause was within the airline’s control — not safety-required or outside its control',
-        rule: 'Canada Air Passenger Protection Regulations',
+        condition: kind === 'cancellation'
+          ? 'owed only if you were told 14 days or less before departure and the cause was within the airline’s control — not safety-required or outside its control'
+          : 'owed only if the cause was within the airline’s control — not safety-required or outside its control',
+        rule: kind === 'cancellation' ? 'Canada APPR s.12 & s.19' : 'Canada Air Passenger Protection Regulations',
         ruleUrl: URL.appr,
         deadline: 'File within 1 year of the disruption.',
       });
@@ -881,6 +964,13 @@ window.ClaimEngine = (function () {
     return base.concat(extra[a.type] || []);
   }
 
+  /** A figure you can demand: only one the entitlement text LEADS with. Exact amounts always lead
+   *  ("$800 (400% of your one-way fare…)"); ceilings and ranges never do ("Your provable loss, up to $4,700"). */
+  function exactAmount(text) {
+    const m = String(text || '').match(/^\s*(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)(?![\d,]|\s*\/)/);
+    return m ? m[1].replace(/\s+/g, ' ').trim() : null;
+  }
+
   /** The ids of questions that apply and are already answered, in wizard order — so "Back" can walk
    *  through answers that were filled in from a saved trip instead of dead-ending at the result. */
   function prefilledHistory(answers) {
@@ -888,5 +978,5 @@ window.ClaimEngine = (function () {
     return FLOW.filter((step) => step.when(a) && a[step.id] !== undefined).map((step) => step.id);
   }
 
-  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, smallClaimsNotice, evidencePack, prefilledHistory, FLOW };
+  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, smallClaimsNotice, evidencePack, prefilledHistory, exactAmount, FLOW };
 })();

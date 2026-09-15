@@ -1,21 +1,31 @@
 /**
- * Viral caption + hashtag generator (TS port of the caption logic in public/viral.js).
- * The card image itself is rendered as a native View and captured with react-native-view-shot
- * (see app/owed.tsx) — only the text-generation logic lives here.
+ * Share card + caption text (TS port of public/viral.js; parity-tested).
+ * The card image is a native View captured with react-native-view-shot (app/owed.tsx); this module
+ * decides what it may say. Only a strong entitlement can be shared, and every word on the card comes
+ * from that one entitlement — never a fallback like "CASH", never an outcome narrated as already paid.
  */
-import type { Answers, ClaimResult, Details } from '@/lib/claim-engine';
+import type { Answers, ClaimResult, Details, Entitlement } from '@/lib/claim-engine';
+
+export type ShareCopy = { headline: string; sub: string; panelLabel: string; big: string; rule: string };
+
+// A figure the entitlement LEADS with is exact ("$800 (400% of your fare…)"); a ceiling never leads.
+const EXACT = /^\s*(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)(?![\d,]|\s*\/)/;
+const ANY_FIGURE = /(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|[\d,]+ SDR)/;
+
+// The one entitlement a share card may feature: a strong (firm) claim. Conditional money depends on
+// facts we don't know (the cause, the carrier's size), so it never becomes "owes me" in a public post.
+function featured(res: ClaimResult): Entitlement | null {
+  return (res.entitlements || []).find((e) => e.strength === 'strong') || null;
+}
 
 export function pickAmount(res: ClaimResult): string | null {
-  const cash = (e?: { amountText?: string }) => !!e && /\$|€|£|CAD/.test(e.amountText || '');
-  const e = res.entitlements.find((x) => x.strength === 'strong' && cash(x)) || res.entitlements.find((x) => x.strength === 'conditional' && cash(x));
-  if (!e) return null;
-  const m = (e.amountText || '').match(/(\$[\d,]+|€\s?\d[\d,]*|£\s?\d[\d,]*|CAD\s?[\d,]+)/);
+  const e = featured(res);
+  const m = e ? String(e.amountText || '').match(EXACT) : null;
   return m ? m[1].replace(/\s+/g, ' ').trim() : null;
 }
 
-export function topRule(res: ClaimResult): string {
-  const e = res.entitlements.find((x) => x.rule && x.rule !== '—');
-  return e ? e.rule : 'federal law';
+export function shareable(res: ClaimResult): boolean {
+  return !!featured(res);
 }
 
 function airlineName(d: Details): string {
@@ -23,42 +33,86 @@ function airlineName(d: Details): string {
   return n || 'The airline';
 }
 
-const HOOKS: Record<string, ((al: string, amt: string) => string)[]> = {
-  bumped: [
-    (al, amt) => `Got bumped from an oversold ${al} flight? They offered me a voucher — but federal law says I'm owed ${amt} in cash. Most people take the voucher and never find out. ✈️`,
-    (al, amt) => `If you're bumped from an oversold flight, the airline owes you cash — not a meal voucher. ${al} owed me ${amt} under federal bumping rules. Worth knowing before you fly. ✈️`,
-    (al, amt) => `Offered a small voucher after a bump, when the legal amount was ${amt}. The federal rule sets the cash you're owed — here's how I checked mine. 👇`,
-  ],
-  cancelled: [
-    (al) => `If your flight is canceled, you can take a cash refund instead of a travel credit — even if they only offer the credit. ${al} canceled mine; I got my money back. Most people don't know they can. 💸`,
-    (al) => `When a flight is canceled, federal rule 14 CFR Part 260 lets you request a cash refund to your original card instead of a credit. That's how I got mine back from ${al}. 💸`,
-    (al) => `After a cancellation you're entitled to a full cash refund, not just a voucher. ${al} canceled on me and I got the refund. Here's the rule and how to claim it. 👇`,
-  ],
-  delayed: [
-    (al) => `Delayed for hours? Depending on the cause, the airline may owe you meals, a hotel, and rebooking. Here's what the rules actually require — most people never ask. ✈️`,
-    (al) => `Delayed by ${al} for hours? Meals, a hotel, and rebooking may be on the airline. Here's the rule that says so, and how to ask. 👇`,
-  ],
-  bag_late: [
-    (al) => `If your checked bag shows up late, federal rules let you get your bag fee refunded. ${al} owed me mine. Most people never request it. 🧳`,
-    (al) => `If your checked bag arrives late, federal law says the bag fee gets refunded. ${al} owed me mine — here's how to claim it. 🧳`,
-  ],
-  bag_lost: [(al, amt) => `If an airline loses your bag, compensation is capped at ${amt} by law — and you can claim up to that for what was inside. ${al} lost mine. Here's how the limit works. 🧳`],
-  downgrade: [(al) => `Downgraded to a cheaper seat than you paid for? You're owed the fare difference back, by law. ${al} downgraded me — most people never claim the refund. ✈️`],
-  extra: [(al) => `Paid ${al} for Wi-Fi or a seat you never got to use? That's a refund under federal law. Most people never ask — here's how. 💸`],
-};
-
-export function caption(res: ClaimResult, a: Answers, d: Details, variant = 0): string {
+/** Everything the card says, taken from the featured entitlement. null when there is nothing firm to share. */
+export function cardCopy(res: ClaimResult, a: Answers, d: Details): ShareCopy | null {
+  const e = featured(res);
+  if (!e) return null;
   const al = airlineName(d);
-  const amt = pickAmount(res) || 'real money';
-  const list = HOOKS[a.type as string] || [(x: string, m: string) => `Turns out ${x} owes ${m} here under the rules — something most travelers never check. Found out in a couple of minutes. 👇`];
-  const hook = list[variant % list.length](al, amt);
-  const slug = al !== 'The airline' ? '#' + al.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + 'tok' : null;
-  const tags = ['#airlinetok', '#traveltok', '#consumerrights', '#knowyourrights', '#passengerrights', '#travelhack', '#fyp', '#foryou', slug].filter(Boolean).join(' ');
-  return `${hook}\n\nMost people never check what they're owed — took me about 2 minutes.\n\n${tags}`;
+  const rule = e.rule && e.rule !== '—' ? e.rule : 'the rule behind it';
+  const title = String(e.title || '');
+  if (/lost|damaged/i.test(title)) {
+    const cap = (String(e.amountText || '').match(ANY_FIGURE) || [])[1] || '';
+    return {
+      headline: `${al} has to cover my lost bag.`,
+      sub: cap ? `For what I can prove was inside, up to ${cap}.` : 'For what I can prove was inside.',
+      panelLabel: 'COVERED UP TO',
+      big: cap || 'MY PROVEN LOSS',
+      rule,
+    };
+  }
+  const amount = pickAmount(res);
+  const pct = String(e.amountText || '').match(/^(\d+)% of /);
+  const phrase = amount || (pct ? `${pct[1]}% of my fare` : /full cash refund/i.test(title) ? 'a full refund' : /bag fee/i.test(title) ? 'my bag fee back' : /refund/i.test(title) ? 'a refund' : '');
+  return {
+    headline: phrase ? `${al} owes me ${phrase}.` : `${al} owes me — here’s the rule.`,
+    sub: e.condition ? `Conditions apply: ${e.condition}.` : 'Most people never ask for it.',
+    panelLabel: 'THEY OWE ME',
+    big: (phrase || 'see the rule').toUpperCase(),
+    rule,
+  };
 }
 
-export function bigAmount(res: ClaimResult, a: Answers): string {
+// Captions state what the rule entitles you to. Nothing is narrated as already paid.
+// n.start begins a sentence ("Delta" / "The airline"), n.mid sits inside one ("Delta" / "the airline"),
+// n.adj qualifies a noun ("Delta " / "") so "an oversold flight" never reads "an oversold The airline flight".
+type Name = { start: string; mid: string; adj: string };
+const HOOKS: Record<string, ((n: Name, amt: string | null, cap: string) => string)[]> = {
+  bumped: [
+    (n, amt) => `Bumped from an oversold ${n.adj}flight? The federal bumping rule says that's ${amt ? amt + ' in cash' : 'cash'} — a voucher only if you choose one. Most people take the voucher and never check. ✈️`,
+    (n, amt) => `If you're forced off an oversold flight leaving a U.S. airport, the airline owes you cash under 14 CFR 250.5${amt ? ` — for this ${n.adj}flight, ${amt}` : ''}. Worth knowing before you fly. ✈️`,
+  ],
+  cancelled: [
+    (n) => `If your flight is canceled and you don't take the rebooking, you're owed a cash refund to your card — not a travel credit, even if that's all they offer. ${n.start} canceled mine; here's the rule. 💸`,
+    (n) => `Canceled flight, and you chose not to fly? Federal rule 14 CFR Part 260 requires a refund to your original payment, not a voucher. Checking what ${n.mid} owes me. 💸`,
+  ],
+  schedule: [
+    (n) => `${n.start} changed my flight by hours. Under 14 CFR 260, a change that big means a full refund if you decline it — even on a nonrefundable fare. Most people just accept the new time. ✈️`,
+  ],
+  bag_late: [
+    (n) => `If your checked bag shows up late and you filed a report, the bag fee is refundable under federal rules. Asking ${n.mid} for mine — most people never do. 🧳`,
+  ],
+  bag_lost: [
+    (n, _amt, cap) => `If an airline loses your bag, it has to cover what you can prove was inside${cap ? ` — up to ${cap}` : ''}. ${n.start} lost mine. Here's how the limit works. 🧳`,
+  ],
+  downgrade: [
+    (n) => `Downgraded to a lower cabin and refused to fly it? Under 14 CFR 260 that's a full refund of the fare. Asking ${n.mid} for mine. ✈️`,
+  ],
+  extra: [
+    (n) => `Paid ${n.mid} for Wi-Fi or a seat you never got? That's refundable under federal rules. Most people never ask — here's how. 💸`,
+  ],
+};
+
+// The hook follows the featured entitlement, not just the incident type (a missing bag can surface as a lost-bag claim).
+function hookKey(e: Entitlement, a: Answers): string {
+  const t = String(e.title || '');
+  if (/lost|damaged/i.test(t)) return 'bag_lost';
+  if (/bag fee/i.test(t)) return 'bag_late';
+  if (/forced off/i.test(t)) return 'bumped';
+  if (/unused service/i.test(t)) return 'extra';
+  return String(a && a.type);
+}
+
+export function caption(res: ClaimResult, a: Answers, d: Details, variant = 0): string {
+  const e = featured(res);
+  if (!e) return '';
+  const al = airlineName(d);
+  const named = al !== 'The airline';
+  const n: Name = { start: al, mid: named ? al : 'the airline', adj: named ? al + ' ' : '' };
   const amt = pickAmount(res);
-  if (amt) return amt;
-  return ['cancelled', 'extra', 'downgrade'].includes(a.type as string) ? 'A FULL REFUND' : 'CASH';
+  const cap = (String(e.amountText || '').match(ANY_FIGURE) || [])[1] || '';
+  const list = HOOKS[hookKey(e, a)] || [(x: Name) => `Turns out there's a rule for this. Checking what ${x.mid} owes me — took about 2 minutes. 👇`];
+  const hook = list[variant % list.length](n, amt, cap);
+  const slug = named ? '#' + al.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + 'tok' : null;
+  const tags = ['#airlinetok', '#traveltok', '#consumerrights', '#knowyourrights', '#passengerrights', '#travelhack', '#fyp', '#foryou', slug].filter(Boolean).join(' ');
+  return `${hook}\n\nMost people never check what they're owed — took me about 2 minutes.\n\n${tags}`;
 }

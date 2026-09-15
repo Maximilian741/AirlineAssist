@@ -54,7 +54,7 @@ export const STAGES: Record<Stage, { label: string; channel: string; clocks: (a:
       const c: Clock[] = [];
       c.push({ key: 'ack', label: 'Airline must acknowledge in writing', due: (f) => addDays(f, 30), rule: '14 CFR 259.7(c)' });
       c.push({ key: 'answer', label: 'Airline must give a substantive written answer', due: (f) => addDays(f, 60), rule: '14 CFR 259.7(c)' });
-      if (['cancelled', 'schedule', 'downgrade', 'extra', 'bag_late'].includes(a.type as string)) {
+      if (['cancelled', 'schedule', 'extra', 'bag_late'].includes(a.type as string) || (a.type === 'downgrade' && a.downgradeFlew === 'no')) {
         const card = a.payment !== 'other';
         c.push({ key: 'refund', label: card ? 'Refund due (7 business days, credit card)' : 'Refund due (20 calendar days)', due: (f) => (card ? addBusinessDays(f, 7) : addDays(f, 20)), rule: '14 CFR 260.10' });
       }
@@ -100,13 +100,15 @@ type ResultLike = { headline?: string; entitlements?: { strength: string; amount
 
 /** Create a tracked claim from a finished wizard result (returns the new claim; caller appends + saves). */
 export function start(answers: Answers, details: Details, result: ResultLike): TrackedClaim {
-  const cash = (result.entitlements || []).find((e) => e.strength === 'strong' && /\$|€|£|CAD/.test(e.amountText || ''));
+  // Only a figure the entitlement leads with is a demandable amount; "up to $4,700" is a ceiling, not a debt.
+  const lead = (t?: string) => { const m = String(t || '').match(/^\s*(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)(?![\d,]|\s*\/)/); return m ? m[1].replace(/\s+/g, ' ').trim() : ''; };
+  const cash = (result.entitlements || []).find((e) => e.strength === 'strong' && lead(e.amountText));
   return {
     id: 'cl' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
     created: today(),
     answers, details,
     headline: result.headline || '',
-    amount: cash ? (String(cash.amountText).match(/(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)/) || [''])[0].trim() : '',
+    amount: cash ? lead(cash.amountText) : '',
     filings: [],
     status: 'open',
     outcome: null,

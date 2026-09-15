@@ -880,7 +880,7 @@ function renderClaimResult() {
       ${fileSectionHtml(state.claim.answers)}
       <div id="claim-tracker"></div>
       ${escalationHtml(res, state.claim.answers)}
-      ${viralSectionHtml()}
+      ${viralSectionHtml(res)}
       <p class="hint claim-disclaim"> ${esc(res.disclaimer)}</p>
       <div class="claim-nav">${state.claim.history.length ? '<button class="ghost" id="claim-change">← Change an answer</button>' : ''}
         <button class="primary" id="claim-restart">↺ Check another problem</button></div>
@@ -947,7 +947,9 @@ function renderClaimTracker() {
 }
 
 // ---------- viral: turn the claim into a shareable TikTok receipt + caption ----------
-function viralSectionHtml() {
+function viralSectionHtml(res) {
+  // A share card needs a firm (strong) entitlement behind it; otherwise there is nothing true to post.
+  if (!Viral.shareable(res)) return '';
   return `<div class="claim-doc viral">
     <div class="claim-doc-head"><h3> Share your story</h3></div>
     <p class="hint">A clear receipt — the amount, the rule, and how fast you found it — is what gets people to check their own claims. Turn yours into a post.</p>
@@ -1020,8 +1022,8 @@ async function shareImage(dataUrl, caption) {
 // The step almost nobody takes — and the one airlines actually respond to. Kept collapsed so it
 // reads as an escalation after the airline has already refused, not as the opening move.
 function escalationHtml(res, a) {
-  const cash = res.entitlements.find((e) => e.strength === 'strong' && /\$/.test(e.amountText || ''));
-  const amount = cash ? (String(cash.amountText).match(/\$[\d,]+/) || [''])[0] : '';
+  const cash = res.entitlements.find((e) => e.strength === 'strong' && ClaimEngine.exactAmount(e.amountText));
+  const amount = cash ? ClaimEngine.exactAmount(cash.amountText) : '';
   return `<details class="claim-doc escalate">
     <summary><b>They said no. What now?</b></summary>
     <p class="hint">Most people stop at the customer-service form. That's what the process is designed for. If they've refused — or gone quiet past the deadline — there are two levers left, and airlines respond to both.</p>
@@ -1045,8 +1047,8 @@ function wireEscalation(res, a) {
   const notice = $('#esc-notice');
   if (notice) notice.addEventListener('click', () => {
     const d = state.claim.details || {};
-    const cash = res.entitlements.find((e) => e.strength === 'strong' && /\$/.test(e.amountText || ''));
-    const amount = cash ? (String(cash.amountText).match(/\$[\d,]+/) || [''])[0] : '';
+    const cash = res.entitlements.find((e) => e.strength === 'strong' && ClaimEngine.exactAmount(e.amountText));
+    const amount = cash ? ClaimEngine.exactAmount(cash.amountText) : '';
     const text = ClaimEngine.fill(ClaimEngine.smallClaimsNotice(a, d, { amount }), d, a);
     if (state.claim.trackId) { ClaimTrack.recordFiling(state.claim.trackId, 'smallclaims', 'final notice'); renderClaimTracker(); }
     $('#esc-out').innerHTML = `<div class="claim-doc-head" style="margin-top:14px"><h3>Final notice before legal action</h3><button class="ghost sm" data-copy="esc-letter">Copy</button></div>

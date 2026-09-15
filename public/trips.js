@@ -145,7 +145,7 @@ window.Trips = (function () {
     }
 
     // 3) Bumping — claim the cash promptly (paid same day at the airport; chase it fast after).
-    if (trip.issue === 'bumped') {
+    if (trip.issue === 'bumped' && ['us', 'intl_from_us'].includes(trip.region || 'us')) {
       push(
         'db',
         'Denied-boarding cash claim',
@@ -157,7 +157,7 @@ window.Trips = (function () {
     }
 
     // 4) Refund owed → the airline's own payment clock
-    if (trip.issue === 'cancelled' || trip.issue === 'schedule' || trip.issue === 'downgrade' || trip.issue === 'extra') {
+    if (trip.issue === 'cancelled' || trip.issue === 'schedule' || trip.issue === 'extra') {
       push(
         'refund',
         'Airline must pay your refund by',

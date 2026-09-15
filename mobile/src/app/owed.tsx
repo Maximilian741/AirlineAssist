@@ -28,7 +28,7 @@ import {
   type Entitlement,
   type Question,
 } from '@/lib/claim-engine';
-import { bigAmount, caption, topRule } from '@/lib/viral';
+import { caption, cardCopy, type ShareCopy } from '@/lib/viral';
 import { claimAnswers, claimDetails, type Trip } from '@/lib/trips';
 
 const shortName = (n: string) => n.replace(/\s*\(.*\)\s*$/, '');
@@ -113,6 +113,8 @@ export default function OwedScreen() {
   const q = nextQuestion(answers);
   const res: ClaimResult | null = q ? null : assess(answers);
   const airline = airlineIdx != null ? AIRLINES[airlineIdx] : null;
+  // null when nothing firm is owed: then there is no share card at all.
+  const shareCopy = res ? cardCopy(res, answers, { ...details, airline: shortName(String(details.airline || '')) }) : null;
   // The tracker: filing buttons record the stage; the block below shows the clocks + next move.
   const { claimId } = useLocalSearchParams<{ claimId?: string }>();
   const tracker = useClaimTracker(answers, details, res, claimId || null);
@@ -285,13 +287,14 @@ export default function OwedScreen() {
             />
 
             {/* GO VIRAL */}
+            {shareCopy ? (
             <ThemedView type="backgroundElement" style={[styles.panel, { borderColor: theme.line }]}>
               <ThemedText style={styles.panelTitle} themeColor="brandDeep">📱 Share your receipt</ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.three }}>
                 A clear amount plus the rule behind it is what gets shared. Post the receipt so others know to check too.
               </ThemedText>
               <View style={{ alignItems: 'center' }}>
-                <ReceiptCard airline={shortName(details.airline || 'The airline')} amount={bigAmount(res, answers)} rule={topRule(res)} />
+                <ReceiptCard copy={shareCopy} />
               </View>
               <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.three }}>Caption</ThemedText>
               <Text selectable style={[styles.caption, { color: theme.text, backgroundColor: theme.card, borderColor: theme.line }]}>
@@ -306,6 +309,7 @@ export default function OwedScreen() {
                 Tap Share → pick TikTok (Photo mode); your caption is copied to paste. Auto-posting needs a free TikTok developer app — get one and it becomes one tap.
               </ThemedText>
             </ThemedView>
+            ) : null}
 
             {status ? <ThemedText type="small" style={{ color: theme.good, fontWeight: '600', marginTop: Spacing.two }}>{status}</ThemedText> : null}
             <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.three, fontStyle: 'italic' }}>⚖️ {res.disclaimer}</ThemedText>
@@ -321,9 +325,9 @@ export default function OwedScreen() {
         )}
       </View>
       </ScrollView>
-      {res ? (
+      {res && shareCopy ? (
         <View style={{ position: 'absolute', left: -2000, top: 0 }} pointerEvents="none">
-          <ReceiptCard refProp={cardRef} airline={shortName(details.airline || 'The airline')} amount={bigAmount(res, answers)} rule={topRule(res)} />
+          <ReceiptCard refProp={cardRef} copy={shareCopy} />
         </View>
       ) : null}
     </View>
@@ -419,18 +423,18 @@ function ActionBtn({ label, theme, onPress }: { label: string; theme: ReturnType
   );
 }
 
-function ReceiptCard({ refProp, airline, amount, rule }: { refProp?: React.RefObject<View | null>; airline: string; amount: string; rule: string }) {
+function ReceiptCard({ refProp, copy }: { refProp?: React.RefObject<View | null>; copy: ShareCopy }) {
   return (
     <View ref={refProp} collapsable={false} style={card.wrap}>
       <View style={card.accent} />
       <Text style={card.kicker}>Most travelers never claim this</Text>
-      <Text style={card.headline}>{airline} owes me {amount}.</Text>
-      <Text style={card.sub}>They offered a voucher — but federal rules entitle me to a cash refund.</Text>
+      <Text style={card.headline}>{copy.headline}</Text>
+      <Text style={card.sub}>{copy.sub}</Text>
       <View style={card.receipt}>
-        <Text style={card.rlabel}>They owe me</Text>
-        <Text style={card.ramt}>{amount}</Text>
-        <Text style={card.rlabel}>The law that says so</Text>
-        <Text style={card.rrule}>{rule}</Text>
+        <Text style={card.rlabel}>{copy.panelLabel}</Text>
+        <Text style={card.ramt}>{copy.big}</Text>
+        <Text style={card.rlabel}>The rule</Text>
+        <Text style={card.rrule}>{copy.rule}</Text>
       </View>
       <Text style={card.cta}>What does your airline owe you?</Text>
       <Text style={card.ctaOrange}>Find out free ↓</Text>
