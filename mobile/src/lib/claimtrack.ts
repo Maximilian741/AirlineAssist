@@ -27,7 +27,7 @@ export type Clock = { key: string; label: string; due: (filed: string) => string
 export type TimelineItem = { stage: Stage; stageLabel: string; filedOn: string; key: string; label: string; rule: string; due: string; daysLeft: number; status: 'waiting' | 'due-soon' | 'overdue' };
 export type NextAction = { kind: 'closed' | 'file' | 'escalate' | 'wait'; channel?: string; text: string; reason?: TimelineItem; until?: TimelineItem };
 
-export function today(): string { return new Date().toISOString().slice(0, 10); }
+export function today(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 export function addDays(d: string, n: number): string | null {
   const x = new Date(d + 'T12:00:00'); if (isNaN(x.getTime())) return null;
   x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10);

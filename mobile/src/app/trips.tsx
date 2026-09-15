@@ -13,9 +13,9 @@ import { AIRLINES } from '@/data/airlines';
 import { FAREDROP, FAREDROP_VERIFIED } from '@/data/faredrop';
 import { useTheme } from '@/hooks/use-theme';
 import { loadClaims } from '@/components/claim-tracker';
-import { checkAndNotify, fetchWatches, watchTrip, type Watch } from '@/lib/alerts';
+import { checkAndNotify, ensurePermission, fetchWatches, scheduleDeadlineReminders, watchTrip, type Watch } from '@/lib/alerts';
 import { fmt as fmtDay, nextAction, timeline, type TrackedClaim } from '@/lib/claimtrack';
-import { assess } from '@/lib/claim-engine';
+import { assess, nextQuestion } from '@/lib/claim-engine';
 import { airlineFromFlightNo, claimAnswers, deadlines, fmt, ISSUE_LABELS, newId, type Deadline, type Trip, type TripIssue } from '@/lib/trips';
 
 const KEY = 'ff-trips';
@@ -69,6 +69,12 @@ export default function TripsScreen() {
     setEditing(null);
     // Put the machine on it: the server re-checks this trip for fare drops + schedule shifts.
     watchTrip(withId).then((ok) => { if (ok) refreshWatches(); });
+    // Saving a trip is when reminders become useful, so this is where the OS permission prompt belongs.
+    ensurePermission(true).then((ok) => {
+      if (!ok) return;
+      scheduleDeadlineReminders().catch(() => {});
+      checkAndNotify().catch(() => {});
+    });
   };
   const del = (id: string) => {
     Alert.alert('Remove trip?', 'This deletes it from this device.', [
@@ -106,7 +112,7 @@ export default function TripsScreen() {
               <ThemedText style={styles.ctaText}>＋ Add your first trip</ThemedText>
             </Pressable>
             <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two, textAlign: 'center' }}>
-              Stored only on this device. No account, nothing sent anywhere.
+              Trips are stored on this device, with no account. To watch fares, only the route and dates are checked on our server — never your name or confirmation number.
             </ThemedText>
           </View>
         ) : (
@@ -264,9 +270,13 @@ function TripCard({ t, watch, theme, onEdit, onDelete, onClaim }: { t: Trip; wat
   let stake: string | null = null;
   if (hasIssue) {
     try {
-      const res = assess(claimAnswers(t));
-      const cash = res.entitlements.find((e) => (e.strength === 'strong' || e.strength === 'conditional') && /\$|€|£|CAD/.test(e.amountText || ''));
-      stake = cash ? cash.amountText : null;
+      const answers = claimAnswers(t);
+      // No figure from a partial picture: an unanswered money question would otherwise read as "$0 owed".
+      if (!nextQuestion(answers)) {
+        const res = assess(answers);
+        const cash = res.entitlements.find((e) => (e.strength === 'strong' || e.strength === 'conditional') && /\$|€|£|CAD/.test(e.amountText || ''));
+        stake = cash ? cash.amountText : null;
+      }
     } catch {}
   }
   const route = [t.origin, t.dest].filter(Boolean).join(' → ') || '—';
@@ -318,6 +328,44 @@ function DeadlineRow({ d, theme }: { d: Deadline; theme: Theme }) {
   );
 }
 
+// Form controls live at module scope. Declared inside TripForm they became a new component type on
+// every keystroke, so React remounted the TextInput and the phone keyboard closed after each letter.
+function FormField({ label, value, onChange, ph, kb, theme }: { label: string; value?: string; onChange: (v: string) => void; ph?: string; kb?: 'numeric'; theme: Theme }) {
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12 }}>{label}</ThemedText>
+      <TextInput
+        value={value || ''}
+        onChangeText={onChange}
+        placeholder={ph}
+        placeholderTextColor={theme.textSecondary}
+        keyboardType={kb}
+        autoCorrect={false}
+        accessibilityLabel={label}
+        style={[styles.input, { backgroundColor: theme.card, borderColor: theme.line, color: theme.text }]}
+      />
+    </View>
+  );
+}
+
+function FormChips<T extends string>({ label, opts, cur, onPick, theme }: { label: string; opts: { v: T; l: string }[]; cur?: T; onPick: (v: T) => void; theme: Theme }) {
+  return (
+    <View style={{ marginTop: Spacing.two }}>
+      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12, marginBottom: 5 }}>{label}</ThemedText>
+      <View style={styles.chipWrap}>
+        {opts.map((o) => {
+          const on = cur === o.v;
+          return (
+            <Pressable key={o.v} onPress={() => onPick(o.v)} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
+              <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>{o.l}</ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function TripForm({ trip, theme, onSave, onCancel }: { trip: Trip; theme: Theme; onSave: (t: Trip) => void; onCancel: () => void }) {
   const [t, setT] = useState<Trip>({ ...trip });
   const set = (k: keyof Trip, v: string) =>
@@ -330,57 +378,36 @@ function TripForm({ trip, theme, onSave, onCancel }: { trip: Trip; theme: Theme;
       }
       return next;
     });
-  const input = [styles.input, { backgroundColor: theme.card, borderColor: theme.line, color: theme.text }];
-  const Field = ({ label, k, ph, kb }: { label: string; k: keyof Trip; ph?: string; kb?: 'numeric' }) => (
-    <View style={styles.field}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12 }}>{label}</ThemedText>
-      <TextInput value={(t[k] as string) || ''} onChangeText={(v) => set(k, v)} placeholder={ph} placeholderTextColor={theme.textSecondary} keyboardType={kb} autoCorrect={false} style={input} />
-    </View>
-  );
-  const Chips = <T extends string>({ label, opts, cur, onPick }: { label: string; opts: { v: T; l: string }[]; cur?: T; onPick: (v: T) => void }) => (
-    <View style={{ marginTop: Spacing.two }}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12, marginBottom: 5 }}>{label}</ThemedText>
-      <View style={styles.chipWrap}>
-        {opts.map((o) => {
-          const on = cur === o.v;
-          return (
-            <Pressable key={o.v} onPress={() => onPick(o.v)} style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-              <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>{o.l}</ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
 
   return (
     <View>
       <ThemedText style={{ fontSize: 22, fontWeight: '800' }}>{trip.id ? 'Edit trip' : 'Add a trip'}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>Only the airline and date are needed. The more you add, the more it can file for you later.</ThemedText>
-      <Chips label="Airline" opts={AIRLINES.map((a) => ({ v: shortName(a.name), l: shortName(a.name) }))} cur={t.airline} onPick={(v) => set('airline', v)} />
+      <FormChips label="Airline" opts={AIRLINES.map((a) => ({ v: shortName(a.name), l: shortName(a.name) }))} cur={t.airline} onPick={(v) => set('airline', v)} theme={theme} />
       <View style={styles.grid}>
-        <Field label="Flight #" k="flightNo" ph="DL1234" />
-        <Field label="Confirmation #" k="confirmation" ph="ABC123" />
-        <Field label="From" k="origin" ph="HLN" />
-        <Field label="To" k="dest" ph="JFK" />
-        <Field label="Flight date" k="departDate" ph="YYYY-MM-DD" />
-        <Field label="Date booked" k="bookedDate" ph="YYYY-MM-DD" />
+        <FormField label="Flight #" value={t.flightNo} onChange={(v) => set('flightNo', v)} ph="DL1234" theme={theme} />
+        <FormField label="Confirmation #" value={t.confirmation} onChange={(v) => set('confirmation', v)} ph="ABC123" theme={theme} />
+        <FormField label="From" value={t.origin} onChange={(v) => set('origin', v)} ph="HLN" theme={theme} />
+        <FormField label="To" value={t.dest} onChange={(v) => set('dest', v)} ph="JFK" theme={theme} />
+        <FormField label="Flight date" value={t.departDate} onChange={(v) => set('departDate', v)} ph="YYYY-MM-DD" theme={theme} />
+        <FormField label="Date booked" value={t.bookedDate} onChange={(v) => set('bookedDate', v)} ph="YYYY-MM-DD" theme={theme} />
       </View>
-      <Chips label="Where" opts={REGIONS} cur={t.region} onPick={(v) => set('region', v)} />
-      <Chips label="Paid with" opts={[{ v: 'credit' as const, l: 'Credit card' }, { v: 'other' as const, l: 'Debit / cash' }]} cur={t.payment} onPick={(v) => set('payment', v)} />
-      <Chips label="What happened?" opts={ISSUE_KEYS.map((k) => ({ v: k, l: ISSUE_LABELS[k] }))} cur={t.issue} onPick={(v) => set('issue', v)} />
+      <FormChips label="Where" opts={REGIONS} cur={t.region} onPick={(v) => set('region', v)} theme={theme} />
+      <FormChips label="Paid with" opts={[{ v: 'credit' as const, l: 'Credit card' }, { v: 'other' as const, l: 'Debit / cash' }]} cur={t.payment} onPick={(v) => set('payment', v)} theme={theme} />
+      <FormChips label="What happened?" opts={ISSUE_KEYS.map((k) => ({ v: k, l: ISSUE_LABELS[k] }))} cur={t.issue} onPick={(v) => set('issue', v)} theme={theme} />
       {t.issue && t.issue !== 'none' ? (
         <View style={styles.grid}>
-          <Field label="When did it happen?" k="issueDate" ph="YYYY-MM-DD" />
-          {t.issue === 'bumped' ? <Field label="Your one-way fare" k="fare" ph="250" kb="numeric" /> : null}
+          <FormField label="When did it happen?" value={t.issueDate} onChange={(v) => set('issueDate', v)} ph="YYYY-MM-DD" theme={theme} />
+          {t.issue === 'bumped' ? <FormField label="Your one-way fare" value={t.fare} onChange={(v) => set('fare', v)} ph="250" kb="numeric" theme={theme} /> : null}
         </View>
       ) : null}
       {t.issue === 'delayed' || t.issue === 'bumped' ? (
-        <Chips
+        <FormChips
           label="How late did you arrive?"
           opts={[{ v: '<1', l: '<1h' }, { v: '1-2', l: '1–2h' }, { v: '2-3', l: '2–3h' }, { v: '3-4', l: '3–4h' }, { v: '4-6', l: '4–6h' }, { v: '6-9', l: '6–9h' }, { v: '9+', l: '9h+' }]}
-          cur={t.arrDelay || '3-4'}
+          cur={t.arrDelay}
           onPick={(v) => set('arrDelay', v)}
+          theme={theme}
         />
       ) : null}
       <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four }}>

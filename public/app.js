@@ -882,7 +882,8 @@ function renderClaimResult() {
       ${escalationHtml(res, state.claim.answers)}
       ${viralSectionHtml()}
       <p class="hint claim-disclaim"> ${esc(res.disclaimer)}</p>
-      <button class="primary" id="claim-restart">↺ Check another problem</button>
+      <div class="claim-nav">${state.claim.history.length ? '<button class="ghost" id="claim-change">← Change an answer</button>' : ''}
+        <button class="primary" id="claim-restart">↺ Check another problem</button></div>
     </div>`;
 
   $$('[data-copy]').forEach((b) => b.addEventListener('click', () => {
@@ -894,6 +895,8 @@ function renderClaimResult() {
     else done();
   }));
   $('#claim-restart').addEventListener('click', startClaim);
+  const change = $('#claim-change');
+  if (change) change.addEventListener('click', claimBack);
   wireFileSection(res, state.claim.answers);
   wireEscalation(res, state.claim.answers);
   wireViralSection(res, state.claim.answers);
@@ -1616,7 +1619,7 @@ function renderTripsBody() {
       </div>
       <div class="tv-empty">
         <button class="primary" id="tv-first">＋ Add your first trip</button>
-        <p class="hint">Takes 20 seconds. Stored only on this device — no account, nothing sent anywhere.</p>
+        <p class="hint">Takes 20 seconds. Stored on this device with no account. To watch fares, only the route and dates are checked on our server — never your name or confirmation number.</p>
       </div>`;
     $('#tv-first').addEventListener('click', () => { state.tripEditing = {}; renderTrips(); });
     return;
@@ -1712,7 +1715,7 @@ function openRefundFromAlert(tripId, alertIdx) {
     const days = t.departDate ? Math.round((new Date(t.departDate + 'T00:00:00') - new Date(answers.incidentDate + 'T00:00:00')) / 86400000) : null;
     answers.schedNotice = days == null ? '14+' : days < 7 ? '<7' : days < 14 ? '7-13' : '14+';
   }
-  state.claim = { answers, history: [], details: Trips.claimDetails(t) };
+  state.claim = { answers, history: ClaimEngine.prefilledHistory(answers), details: Trips.claimDetails(t) };
   const idx = (window.AIRLINES || []).findIndex((x) => x.name.replace(/\s*\(.*\)\s*$/, '') === (t.airline || ''));
   if (idx >= 0) {
     const al = window.AIRLINES[idx];
@@ -1863,13 +1866,16 @@ function openTrackedClaim(id) {
 function moneyBannerHtml() {
   const m = Trips.moneyOnTable();
   const foreign = m.foreign || [];
-  if (!m.confirmed && !m.potential && !m.unquantified && !foreign.length) return '';
+  if (!m.confirmed && !m.potential && !m.unquantified && !m.incomplete && !foreign.length) return '';
   const bits = [];
   if (m.potential) bits.push(`plus up to <b>${money(m.potential)}</b> more if the airline caused it`);
   if (foreign.length) bits.push(`plus <b>${foreign.map(esc).join(' + ')}</b> in EU/UK/Canada compensation if the airline caused it`);
   if (m.unquantified) bits.push(`${m.unquantified} refund${m.unquantified === 1 ? '' : 's'} owed (add what you paid to total them)`);
+  if (m.incomplete) bits.push(`${m.incomplete} claim${m.incomplete === 1 ? ' needs' : 's need'} a couple more answers before we can put a number on ${m.incomplete === 1 ? 'it' : 'them'}`);
   const head = m.confirmed
-    ? `You're owed <b class="tv-big">${money(m.confirmed)}</b>`    : `You have <b class="tv-big">${m.potential ? money(m.potential) : foreign[0] ? esc(foreign[0]) : 'money'}</b> on the table`;
+    ? `You're owed <b class="tv-big">${money(m.confirmed)}</b>`    : (m.potential || foreign.length || m.unquantified)
+      ? `You have <b class="tv-big">${m.potential ? money(m.potential) : foreign[0] ? esc(foreign[0]) : 'money'}</b> on the table`
+      : `<b class="tv-big">${m.incomplete}</b> claim${m.incomplete === 1 ? '' : 's'} to finish`;
   return `<div class="tv-money">
     <div class="tv-money-top">${head}${m.tripsWithClaims ? ` <span class="hint">across ${m.tripsWithClaims} trip${m.tripsWithClaims === 1 ? '' : 's'}</span>` : ''}</div>
     ${bits.length ? `<div class="tv-money-sub">${bits.join(' · ')}</div>` : ''}
@@ -1996,8 +2002,8 @@ function renderTripForm() {
         </select></label>
         <label id="tf-issuedate-wrap" class="${t.issue && t.issue !== 'none' ? '' : 'hidden'}">When did it happen?<input id="tf-issuedate" type="date" value="${esc(t.issueDate || '')}" /></label>
         <label>What you paid <span class="hint" style="font-weight:400">(tracks fare drops)</span><input id="tf-fare" type="number" min="0" value="${esc(t.fare || '')}" placeholder="250" /></label>
-        <label id="tf-delay-wrap" class="${t.issue === 'delayed' || t.issue === 'bumped' ? '' : 'hidden'}">How late did you arrive?<select id="tf-delay">
-          ${['<1|Under 1 hour', '1-2|1–2 hours', '2-3|2–3 hours', '3-4|3–4 hours', '4-6|4–6 hours', '6-9|6–9 hours', '9+|9+ hours'].map((s) => { const [v, l] = s.split('|'); return opt(v, l, t.arrDelay || '3-4'); }).join('')}
+        <label id="tf-delay-wrap" class="${t.issue === 'delayed' || t.issue === 'bumped' ? '' : 'hidden'}">How late did you arrive?<select id="tf-delay">${opt('', '— choose —', t.arrDelay || '')}
+          ${['<1|Under 1 hour', '1-2|1–2 hours', '2-3|2–3 hours', '3-4|3–4 hours', '4-6|4–6 hours', '6-9|6–9 hours', '9+|9+ hours'].map((s) => { const [v, l] = s.split('|'); return opt(v, l, t.arrDelay || ''); }).join('')}
         </select></label>
       </div>
       <div class="file-actions">
@@ -2039,7 +2045,7 @@ function renderTripForm() {
       issue: $('#tf-issue').value,
       issueDate: $('#tf-issuedate').value || $('#tf-depart').value,
       fare: $('#tf-fare').value,
-      arrDelay: $('#tf-delay').value,
+      arrDelay: ['delayed', 'bumped'].includes($('#tf-issue').value) ? $('#tf-delay').value : '',
     };
     if (!data.airline && !data.departDate) { alert('Add at least the airline or the flight date.'); return; }
     const saved = t.id ? Trips.update(t.id, data) : Trips.add(data);
@@ -2054,7 +2060,8 @@ function renderTripForm() {
 function openClaimFromTrip(id) {
   const t = Trips.all().find((x) => x.id === id);
   if (!t) return;
-  state.claim = { answers: Trips.claimAnswers(t), history: [], details: Trips.claimDetails(t) };
+  const answers = Trips.claimAnswers(t);
+  state.claim = { answers, history: ClaimEngine.prefilledHistory(answers), details: Trips.claimDetails(t) };
   const idx = (window.AIRLINES || []).findIndex((a) => a.name.replace(/\s*\(.*\)\s*$/, '') === (t.airline || ''));
   if (idx >= 0) {
     const a = window.AIRLINES[idx];

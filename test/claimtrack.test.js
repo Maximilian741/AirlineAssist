@@ -31,7 +31,9 @@ const cancelled = { type: 'cancelled', traveled: 'no', region: 'us', payment: 'c
 function backdate(CT, id, stage, daysAgo) {
   const c = CT.get(id);
   const d = new Date(); d.setDate(d.getDate() - daysAgo);
-  c.filings = c.filings.map((f) => (f.stage === stage ? { ...f, date: d.toISOString().slice(0, 10) } : f));
+  // Local calendar date, matching the tracker: toISOString() is UTC, already tomorrow in U.S. evenings.
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  c.filings = c.filings.map((f) => (f.stage === stage ? { ...f, date: day } : f));
   CT.update(id, { filings: c.filings });
 }
 

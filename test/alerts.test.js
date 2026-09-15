@@ -33,7 +33,8 @@ const { deadlines } = await import('../mobile/src/lib/trips.ts');
 
 const computeEvents = (trips, watches) => computeEventsCore(trips, watches, deadlines);
 
-const iso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+// Local calendar dates, matching the engine: toISOString() is UTC, which is already tomorrow in U.S. evenings.
+const iso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const trip = (over = {}) => ({ id: 't1', airline: 'Delta Air Lines', origin: 'HLN', dest: 'JFK', departDate: iso(20), region: 'us', payment: 'credit', issue: 'none', ...over });
 
 test('no watches, no issues, no near deadlines -> no events', () => {

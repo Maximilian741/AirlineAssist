@@ -61,8 +61,11 @@ export const ISSUE_LABELS: Record<TripIssue, string> = {
   extra: 'I paid for something I didn’t get',
 };
 
+// The traveler's calendar day, not UTC's — in U.S. evenings UTC is already tomorrow, which would expire a
+// deadline that is still due today.
 export function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function parse(d?: string): Date | null {
   if (!d) return null;
@@ -154,8 +157,9 @@ export function deadlines(trip: Trip): Deadline[] {
       'Canada gives you a full year to claim cash compensation (up to CAD 1,000; CAD 2,400 for bumping).', 'Canada APPR');
   }
   if (trip.region === 'from_eu') {
-    push('eu261', 'EU261 claim window', addDays(issueDate, 730),
-      'EU261 pays €250–€600 cash. The limit varies by country (often 2–3 years) — do not sit on it.', 'EC Regulation 261/2004');
+    push('eu261', 'EU261 claim window (safe-in-every-country date)', addDays(issueDate, 365),
+      'EU261 pays €250–€600 cash. The real limit depends on which country’s courts you’d use (roughly 1–10 years; Belgium and Poland run about 1 year) — file within a year and you’re safe everywhere.',
+      'EC Regulation 261/2004 (Cuadrench Moré C-139/11: national limits apply)');
   }
   if (trip.region === 'from_uk') {
     push('uk261', 'UK261 claim window', addDays(issueDate, 2190),
@@ -176,30 +180,27 @@ function sortDeadlines(list: Deadline[]): Deadline[] {
 
 /** Map a saved trip onto the claim engine's answers, so a claim opens fully answered. */
 export function claimAnswers(trip: Trip): Answers {
-  const a: Answers = {
-    type: trip.issue === 'none' ? undefined : trip.issue,
-    region: trip.region || 'us',
-    payment: trip.payment || 'credit',
-    incidentDate: trip.issueDate || trip.departDate,
-  };
-  if (trip.issue === 'cancelled') a.traveled = trip.traveled || 'no';
-  if (trip.issue === 'schedule') {
-    a.schedDelta = '3-4';
-    a.schedAccepted = 'no';
-    a.schedDirection = 'later';
-    a.flightDate = trip.departDate;
-  }
+  // Map only what the trip actually records. Answers that decide the money but that the user never
+  // gave (how late, whether a report was filed, the size of a schedule change) are left for the
+  // wizard to ask — an entitlement must never be computed from an assumed answer.
+  const a: Answers = { type: trip.issue === 'none' ? undefined : trip.issue };
+  if (trip.region) a.region = trip.region;
+  if (trip.payment) a.payment = trip.payment;
+  const date = trip.issueDate || trip.departDate;
+  if (date) a.incidentDate = date;
+  if (trip.issue === 'cancelled' && trip.traveled) a.traveled = trip.traveled;
+  if (trip.issue === 'schedule' && trip.departDate) a.flightDate = trip.departDate;
   if (trip.issue === 'bumped') {
-    a.voluntary = trip.voluntary || 'no';
-    a.fareOneWay = Number(trip.fare) || 0;
-    a.arrDelay = trip.arrDelay || '3-4';
+    if (trip.voluntary) a.voluntary = trip.voluntary;
+    // "What you paid" can be a round-trip total; it is the one-way fare only on a one-way booking.
+    if (Number(trip.fare) > 0 && !trip.returnDate) a.fareOneWay = Number(trip.fare);
   }
-  if (trip.issue === 'delayed') a.arrDelay = trip.arrDelay || '3-4';
+  if ((trip.issue === 'bumped' || trip.issue === 'delayed') && trip.arrDelay) a.arrDelay = trip.arrDelay;
   if (trip.issue === 'bag_late') {
-    a.bagHours = trip.bagHours || '12-15';
-    a.reportFiled = trip.reportFiled || 'yes';
+    if (trip.bagHours) a.bagHours = trip.bagHours;
+    if (trip.reportFiled) a.reportFiled = trip.reportFiled;
   }
-  if (trip.region === 'from_eu' || trip.region === 'from_uk') a.distanceBand = trip.distanceBand || 'long';
+  if ((trip.region === 'from_eu' || trip.region === 'from_uk') && trip.distanceBand) a.distanceBand = trip.distanceBand;
   return a;
 }
 

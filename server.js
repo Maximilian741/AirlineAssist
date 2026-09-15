@@ -99,15 +99,15 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/health') return json(res, healthPayload());
     if (url.pathname === '/api/meta') return json(res, metaPayload());
-    if (url.pathname === '/api/search' && req.method === 'POST') return handleSearch(req, res);
-    if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, res);
-    if (url.pathname === '/api/explore' && req.method === 'POST') return handleExplore(req, res);
-    if (url.pathname === '/api/calendar' && req.method === 'POST') return handleCalendar(req, res);
+    if (url.pathname === '/api/search' && req.method === 'POST') return await handleSearch(req, res);
+    if (url.pathname === '/api/scan' && req.method === 'POST') return await handleScan(req, res);
+    if (url.pathname === '/api/explore' && req.method === 'POST') return await handleExplore(req, res);
+    if (url.pathname === '/api/calendar' && req.method === 'POST') return await handleCalendar(req, res);
     if (url.pathname === '/api/history') return handleHistory(res, url);
     if (url.pathname === '/api/trend') return handleTrend(res, url);
 
     // ---- watchdog: register a trip, poll its alerts, force a sweep ----
-    if (url.pathname === '/api/watch' && req.method === 'POST') return handleWatchRegister(req, res);
+    if (url.pathname === '/api/watch' && req.method === 'POST') return await handleWatchRegister(req, res);
     if (url.pathname === '/api/watch' && req.method === 'GET') return json(res, { watches: watchdog.list(), summary: watchdog.summary() });
     if (url.pathname === '/api/watch/sweep' && req.method === 'POST') {
       const r = await watchdog.sweep(runSearch, { log: (m) => console.log('  ' + m), onPrice: history.record });
@@ -121,11 +121,16 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname.startsWith('/api/')) return json(res, { error: 'Unknown endpoint' }, 404);
 
-    return serveStatic(url.pathname, res);
+    return await serveStatic(url.pathname, res);
   } catch (err) {
-    return json(res, { error: String(err?.message || err) }, 500);
+    const message = String(err?.message || err);
+    // A body we can't parse is the caller's mistake, not a server fault.
+    return json(res, { error: message }, message === 'Invalid JSON body' ? 400 : 500);
   }
 });
+
+// Backstop: a stray rejection anywhere must be logged, never take the public server down.
+process.on('unhandledRejection', (err) => console.error('  unhandled rejection:', (err && err.message) || err));
 
 server.listen(PORT, () => {
   const amadeusOn = amadeus.isConfigured();

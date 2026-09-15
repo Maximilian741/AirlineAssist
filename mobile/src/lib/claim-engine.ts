@@ -270,6 +270,13 @@ const FLOW: FlowStep[] = [
   { id: 'incidentDate', when: (a) => !!a.type, q: { title: 'When did this happen?', help: 'Used to work out your filing deadlines.', kind: 'date' } },
 ];
 
+/** The ids of questions that apply and are already answered, in wizard order — so "Back" can walk
+ *  through answers that were filled in from a saved trip instead of dead-ending at the result. */
+export function prefilledHistory(answers: Answers): string[] {
+  const a = answers || {};
+  return FLOW.filter((step) => step.when(a) && a[step.id] !== undefined).map((step) => step.id);
+}
+
 export function nextQuestion(answers: Answers): Question | null {
   for (const step of FLOW) {
     if (step.when(answers) && answers[step.id] === undefined) return { id: step.id, ...step.q };

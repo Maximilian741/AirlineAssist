@@ -3,9 +3,10 @@
 // Every search/scan appends the best price we saw for a route+date, so the longer you use the
 // app, the more of a longitudinal trend it accumulates.
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { readJson, writeJson } from './jsonstore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -13,18 +14,12 @@ const FILE = path.join(DATA_DIR, 'history.json');
 const MAX_RECORDS = 8000;
 
 function load() {
-  try {
-    if (!existsSync(FILE)) return [];
-    return JSON.parse(readFileSync(FILE, 'utf8'));
-  } catch {
-    return [];
-  }
+  const records = readJson(FILE, []);
+  return Array.isArray(records) ? records : [];
 }
 
 function save(records) {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  const trimmed = records.slice(-MAX_RECORDS);
-  writeFileSync(FILE, JSON.stringify(trimmed));
+  writeJson(FILE, records.slice(-MAX_RECORDS));
 }
 
 function key(r) {

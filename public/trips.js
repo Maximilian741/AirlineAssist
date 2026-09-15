@@ -7,7 +7,8 @@
 //
 // Deadlines below come from the SAME verified sources as rights-data.js (14 CFR Part 260/250/254,
 // FCBA 15 U.S.C. 1666, Montreal Convention Art. 31, EU261, UK261, Canada APPR).
-// Storage is localStorage only — trips never leave the device (no account, no server, no tracking).
+// Storage is localStorage on this device, with no account. Watching a trip sends only its route and dates
+// to the server (see watch()); names and confirmation numbers never leave the device.
 
 window.Trips = (function () {
   'use strict';
@@ -47,8 +48,11 @@ window.Trips = (function () {
   }
 
   // ---------- date helpers ----------
+  // The traveler's calendar day, not UTC's — in U.S. evenings UTC is already tomorrow, which would expire a
+  // deadline that is still due today.
   function today() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   function parse(d) {
     if (!d) return null;
@@ -243,7 +247,10 @@ window.Trips = (function () {
   function atStake(trip) {
     if (!trip.issue || trip.issue === 'none' || !window.ClaimEngine) return null;
     try {
-      const res = window.ClaimEngine.assess(claimAnswers(trip));
+      const answers = claimAnswers(trip);
+      // No figure from a partial picture: an unanswered money question would otherwise read as "$0 owed".
+      if (window.ClaimEngine.nextQuestion(answers)) return null;
+      const res = window.ClaimEngine.assess(answers);
       const cash = res.entitlements.find((e) => (e.strength === 'strong' || e.strength === 'conditional') && /\$|€|£|CAD/.test(e.amountText || ''));
       return cash ? cash.amountText : (res.hasClaim ? 'a refund' : null);
     } catch {
@@ -253,30 +260,32 @@ window.Trips = (function () {
 
   /** Map a saved trip onto the claim engine's answer shape, so a claim opens pre-filled. */
   function claimAnswers(trip) {
-    const a = {
-      type: trip.issue,
-      region: trip.region || 'us',
-      payment: trip.payment || 'credit',
-      incidentDate: trip.issueDate || trip.departDate,
-    };
-    if (trip.issue === 'cancelled') a.traveled = trip.traveled || 'no';
+    // Map only what the trip actually records. Answers that decide the money but that the user never
+    // gave (how late, whether a report was filed, the size of a schedule change) are left for the
+    // wizard to ask — an entitlement must never be computed from an assumed answer.
+    const a = { type: trip.issue };
+    if (trip.region) a.region = trip.region;
+    if (trip.payment) a.payment = trip.payment;
+    const date = trip.issueDate || trip.departDate;
+    if (date) a.incidentDate = date;
+    if (trip.issue === 'cancelled' && trip.traveled) a.traveled = trip.traveled;
     if (trip.issue === 'schedule') {
-      a.schedDelta = trip.schedDelta || '3-4';
-      a.schedAccepted = trip.schedAccepted || 'no';
-      a.schedDirection = trip.schedDirection || 'later';
-      a.flightDate = trip.departDate || undefined;
+      if (trip.schedDelta) a.schedDelta = trip.schedDelta;
+      if (trip.schedAccepted) a.schedAccepted = trip.schedAccepted;
+      if (trip.schedDirection) a.schedDirection = trip.schedDirection;
+      if (trip.departDate) a.flightDate = trip.departDate;
     }
     if (trip.issue === 'bumped') {
-      a.voluntary = trip.voluntary || 'no';
-      a.fareOneWay = Number(trip.fare) || 0;
-      a.arrDelay = trip.arrDelay || '3-4';
+      if (trip.voluntary) a.voluntary = trip.voluntary;
+      // "What you paid" is usually a round-trip total; it is the one-way fare only on a one-way booking.
+      if (Number(trip.fare) > 0 && !trip.returnDate) a.fareOneWay = Number(trip.fare);
     }
-    if (trip.issue === 'delayed') a.arrDelay = trip.arrDelay || '3-4';
+    if ((trip.issue === 'bumped' || trip.issue === 'delayed') && trip.arrDelay) a.arrDelay = trip.arrDelay;
     if (trip.issue === 'bag_late') {
-      a.bagHours = trip.bagHours || '12-15';
-      a.reportFiled = trip.reportFiled || 'yes';
+      if (trip.bagHours) a.bagHours = trip.bagHours;
+      if (trip.reportFiled) a.reportFiled = trip.reportFiled;
     }
-    if ((trip.region === 'from_eu' || trip.region === 'from_uk')) a.distanceBand = trip.distanceBand || 'long';
+    if ((trip.region === 'from_eu' || trip.region === 'from_uk') && trip.distanceBand) a.distanceBand = trip.distanceBand;
     return a;
   }
 
@@ -300,15 +309,18 @@ window.Trips = (function () {
    * and liability CEILINGS (lost-bag caps are "up to", not "owed"). Never inflate the headline.
    */
   function moneyOnTable() {
-    let confirmed = 0, potential = 0, tripsWithClaims = 0, unquantified = 0;
+    let confirmed = 0, potential = 0, tripsWithClaims = 0, unquantified = 0, incomplete = 0;
     const foreign = []; // €/£/CAD amounts — never summed into a USD total, but never dropped either
     for (const t of all()) {
       if (!t.issue || t.issue === 'none' || !window.ClaimEngine) continue;
       const open = deadlines(t).some((d) => d.status !== 'expired');
       if (!open) continue;
       let counted = false;
+      const answers = claimAnswers(t);
+      // Unanswered money questions mean no figure yet: counted separately, never priced as $0.
+      if (window.ClaimEngine.nextQuestion(answers)) { incomplete++; continue; }
       try {
-        const res = window.ClaimEngine.assess(claimAnswers(t));
+        const res = window.ClaimEngine.assess(answers);
         for (const e of res.entitlements) {
           if (e.strength !== 'strong' && e.strength !== 'conditional') continue;
           const ceiling = /^(Up to|Your provable loss)/i.test(e.amountText || '');
@@ -330,7 +342,7 @@ window.Trips = (function () {
       if (counted) tripsWithClaims++;
     }
     const next = upcoming()[0] || null;
-    return { confirmed: Math.round(confirmed), potential: Math.round(potential), tripsWithClaims, unquantified, foreign, next };
+    return { confirmed: Math.round(confirmed), potential: Math.round(potential), tripsWithClaims, unquantified, incomplete, foreign, next };
   }
 
   // Only USD figures are summable; €/£/CAD are surfaced separately rather than silently dropped.

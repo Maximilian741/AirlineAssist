@@ -12,9 +12,10 @@
 // keyless source rate-limits by IP) and cheap: with Amadeus configured, one search per trip per
 // sweep. The client polls /api/watch/:id for alerts; nothing pushes yet (that's the mobile app's job).
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { readJson, writeJson } from './jsonstore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -26,11 +27,11 @@ const SIGNIFICANT_MIN = { domestic: 180, intl: 360 };
 const CONTRACT_MIN = { DL: 120, UA: 30, AS: 60, AA: 240, WN: 60, B6: 120, F9: 120, G4: 120, HA: 120 };
 
 function load() {
-  try { return existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : {}; } catch { return {}; }
+  const db = readJson(FILE, {});
+  return db && typeof db === 'object' && !Array.isArray(db) ? db : {};
 }
 function save(db) {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(FILE, JSON.stringify(db, null, 2));
+  writeJson(FILE, db);
 }
 
 /** Snapshot the parts of an offer we diff on. */
@@ -181,6 +182,9 @@ export async function sweep(search, { pace = 900, concurrency = 2, log = () => {
       try {
         const res = await search({ origin: w.origin, destination: w.destination, departDate: w.departDate, returnDate: w.returnDate, adults: 1 }, w.tier);
         if (res.blocked) { w.lastError = 'rate-limited'; continue; }
+        // A failed live source falls back to sample fares. Those must never become a baseline, a price
+        // observation, or a "fare dropped" alert — skip the check instead.
+        if (res.degraded || /sample|mock|fallback/i.test(String(res.source || ''))) { w.lastError = 'live prices unavailable — check skipped'; continue; }
         const best = res.offers.find((o) => o.companion && o.companion.status !== 'ineligible') || res.offers[0] || null;
         const fresh = snapshot(best);
         w.latest = fresh;

@@ -881,5 +881,12 @@ window.ClaimEngine = (function () {
     return base.concat(extra[a.type] || []);
   }
 
-  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, smallClaimsNotice, evidencePack, FLOW };
+  /** The ids of questions that apply and are already answered, in wizard order — so "Back" can walk
+   *  through answers that were filled in from a saved trip instead of dead-ending at the result. */
+  function prefilledHistory(answers) {
+    const a = answers || {};
+    return FLOW.filter((step) => step.when(a) && a[step.id] !== undefined).map((step) => step.id);
+  }
+
+  return { firstQuestion: () => nextQuestion({}), nextQuestion, assess, fill, chargebackLetter, smallClaimsNotice, evidencePack, prefilledHistory, FLOW };
 })();

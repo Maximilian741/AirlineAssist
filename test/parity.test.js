@@ -269,3 +269,66 @@ test('FARECLASS: invalid inputs behave identically', () => {
     assert.ok(mobSch.COC_SCHEDULE.tactics.length >= 9, 'all tactics present');
   });
 }
+
+// ---------------------------------------------------------------- trip -> claim mapping (web ⇄ mobile)
+// What a saved trip is allowed to pre-answer decides whether a figure is honest. Both platforms must
+// map the same trip to the same answers, and seed Back with the same questions.
+{
+  const tvStore = new Map();
+  const tvLocal = { getItem: (k) => (tvStore.has(k) ? tvStore.get(k) : null), setItem: (k, v) => tvStore.set(k, String(v)), removeItem: (k) => tvStore.delete(k) };
+  const tvSandbox = { window: { localStorage: tvLocal }, localStorage: tvLocal };
+  vm.createContext(tvSandbox);
+  for (const f of ['claim-engine.js', 'trips.js']) vm.runInContext(readFileSync(path.join(__dirname, '..', 'public', f), 'utf8'), tvSandbox);
+  const webTrips = tvSandbox.window.Trips;
+  const webEngine = tvSandbox.window.ClaimEngine;
+  const mobTrips = await import('../mobile/src/lib/trips.ts');
+  const mobEngine = await import('../mobile/src/lib/claim-engine.ts');
+
+  test('TRIP -> CLAIM parity: identical pre-filled answers and Back history for every trip shape', () => {
+    let n = 0;
+    for (const issue of ['cancelled', 'schedule', 'delayed', 'bumped', 'bag_late', 'bag_lost', 'downgrade', 'extra'])
+      for (const region of [undefined, 'us', 'from_eu'])
+        for (const payment of [undefined, 'credit'])
+          for (const arrDelay of [undefined, '3-4'])
+            for (const fare of ['', '300'])
+              for (const returnDate of [undefined, '2026-06-10'])
+                for (const extra of [{}, { traveled: 'yes', voluntary: 'no', bagHours: '30+', reportFiled: 'yes', distanceBand: 'medium' }]) {
+                  const trip = { id: 'p', issue, region, payment, arrDelay, fare, returnDate, departDate: '2026-06-01', issueDate: '2026-06-01', ...extra };
+                  const w = j(webTrips.claimAnswers(trip));
+                  const m = j(mobTrips.claimAnswers(trip));
+                  assert.deepEqual(m, w, JSON.stringify(trip));
+                  assert.deepEqual(j(mobEngine.prefilledHistory(m)), j(webEngine.prefilledHistory(w)), 'history ' + JSON.stringify(trip));
+                  n++;
+                }
+    assert.equal(n, 8 * 3 * 2 * 2 * 2 * 2 * 2);
+  });
+}
+
+// ---------------------------------------------------------------- claim deadlines (web ⇄ mobile)
+// A deadline is a date a traveler acts on. Mobile once kept EU261 at 730 days after web was tightened
+// to the safe 365 — reminders fired after the safe date. Sweep every trip shape so that can't recur.
+{
+  const dlStore = new Map();
+  const dlLocal = { getItem: (k) => (dlStore.has(k) ? dlStore.get(k) : null), setItem: (k, v) => dlStore.set(k, String(v)), removeItem: (k) => dlStore.delete(k) };
+  const dlSandbox = { window: { localStorage: dlLocal }, localStorage: dlLocal };
+  vm.createContext(dlSandbox);
+  for (const f of ['claim-engine.js', 'trips.js']) vm.runInContext(readFileSync(path.join(__dirname, '..', 'public', f), 'utf8'), dlSandbox);
+  const webT = dlSandbox.window.Trips;
+  const mobT = await import('../mobile/src/lib/trips.ts');
+  const pick = (list) => j(list).map((d) => ({ key: d.key, label: d.label, due: d.due, daysLeft: d.daysLeft, status: d.status, why: d.why, rule: d.rule }));
+  const iso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+  test('DEADLINES parity: web and mobile compute identical claim windows, dates and wording for every trip shape', () => {
+    let n = 0;
+    for (const issue of ['none', 'cancelled', 'schedule', 'delayed', 'bumped', 'bag_late', 'bag_lost', 'downgrade', 'extra'])
+      for (const region of ['us', 'intl_from_us', 'from_eu', 'from_uk', 'canada'])
+        for (const payment of ['credit', 'other'])
+          for (const offset of [-400, -40, -2, 0, 30])
+            for (const booked of [undefined, 'recent']) {
+              const trip = { id: 'd', issue, region, payment, issueDate: iso(offset), departDate: iso(offset + 10), bookedDate: booked ? iso(offset + 9) : undefined };
+              assert.deepEqual(pick(mobT.deadlines(trip)), pick(webT.deadlines(trip)), JSON.stringify(trip));
+              n++;
+            }
+    assert.equal(n, 9 * 5 * 2 * 5 * 2);
+  });
+}

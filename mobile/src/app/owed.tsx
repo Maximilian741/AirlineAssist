@@ -20,6 +20,7 @@ import {
   chargebackLetter,
   fill,
   nextQuestion,
+  prefilledHistory,
   smallClaimsNotice,
   type Answers,
   type ClaimResult,
@@ -100,7 +101,7 @@ export default function OwedScreen() {
           }
         }
         setAnswers(a);
-        setHistory([]);
+        setHistory(prefilledHistory(a));
         setDetails(claimDetails(t));
         const i = AIRLINES.findIndex((a) => shortName(a.name) === (t.airline || ''));
         if (i >= 0) setAirlineIdx(i);
@@ -122,9 +123,10 @@ export default function OwedScreen() {
     loadClaims().then((list) => {
       const c = list.find((x) => x.id === claimId);
       if (!alive || !c) return;
-      setAnswers(c.answers || {});
+      const restored = c.answers || {};
+      setAnswers(restored);
       setDetails(c.details || {});
-      setHistory([]);
+      setHistory(prefilledHistory(restored));
       const i = AIRLINES.findIndex((a) => shortName(a.name) === (c.details?.airline || ''));
       if (i >= 0) setAirlineIdx(i);
     });
@@ -307,6 +309,11 @@ export default function OwedScreen() {
 
             {status ? <ThemedText type="small" style={{ color: theme.good, fontWeight: '600', marginTop: Spacing.two }}>{status}</ThemedText> : null}
             <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.three, fontStyle: 'italic' }}>⚖️ {res.disclaimer}</ThemedText>
+            {history.length ? (
+              <Pressable onPress={back} accessibilityRole="button" style={({ pressed }) => [styles.cta, { borderWidth: 1.5, borderColor: theme.line, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
+                <ThemedText style={{ fontWeight: '700' }}>← Change an answer</ThemedText>
+              </Pressable>
+            ) : null}
             <Pressable onPress={restart} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
               <ThemedText style={styles.ctaText}>↺ Check another problem</ThemedText>
             </Pressable>

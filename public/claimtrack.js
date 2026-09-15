@@ -25,7 +25,7 @@ window.ClaimTrack = (function () {
     try { const v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   }
   function save(list) { localStorage.setItem(KEY, JSON.stringify(list)); }
-  function today() { return new Date().toISOString().slice(0, 10); }
+  function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
   function addDays(d, n) {
     const x = new Date(d + 'T12:00:00'); if (isNaN(x.getTime())) return null;
     x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10);

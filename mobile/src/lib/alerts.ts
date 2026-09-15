@@ -42,10 +42,14 @@ export function installHandler() {
   });
 }
 
-export async function ensurePermission(): Promise<boolean> {
+/** Whether we may notify. Only shows the OS prompt when `prompt` is true: the dialog should follow a
+ *  user action (saving a trip), not appear at first launch before there is anything to notify about. */
+export async function ensurePermission(prompt = false): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   try {
     const cur = await Notifications.getPermissionsAsync();
     if (cur.granted) { await ensureChannel(); return true; }
+    if (!prompt || !cur.canAskAgain) return false;
     const req = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: true, allowSound: true } });
     if (req.granted) await ensureChannel();
     return req.granted;
@@ -157,12 +161,13 @@ export async function checkAndNotify(): Promise<{ fired: number; pending: number
   const [trips, watches, notified] = await Promise.all([loadTrips(), fetchWatches(), loadNotified()]);
   const events = computeEvents(trips, watches);
   let fired = 0;
+  // Without permission nothing is recorded as sent, so granting it later still delivers what's pending.
+  if (!ok) return { fired: 0, pending: events.length };
   for (const e of events) {
     if (notified.has(e.key)) continue;
-    notified.add(e.key);
-    if (!ok) continue; // record as seen so we don't pile up, but can't show without permission
     try {
       await Notifications.scheduleNotificationAsync({ content: { title: e.title, body: e.body, data: e.data, sound: true }, trigger: null });
+      notified.add(e.key);
       fired++;
     } catch {}
   }
