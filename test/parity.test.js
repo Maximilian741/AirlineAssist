@@ -243,3 +243,17 @@ test('FARECLASS: invalid inputs behave identically', () => {
     assert.deepEqual(j(mobCT.summary([mc])), j(webCT.summary()));
   });
 }
+
+// ---------------------------------------------------------------- contract of carriage (web ⇄ mobile)
+// Rule numbers and verbatim quotes are what a traveler cites at the counter. The phone must never
+// quote a different rule than the web. Regenerate with scripts/extract-coc-mobile.mjs.
+{
+  const cocSandbox = { window: {} };
+  vm.createContext(cocSandbox);
+  vm.runInContext(readFileSync(path.join(__dirname, '..', 'public', 'coc-data.js'), 'utf8'), cocSandbox);
+  const mobCoc = await import('../mobile/src/data/coc-full.ts');
+  test('COC DECODER parity: the mobile dataset is identical to the web decode (every airline, provision, quote)', () => {
+    assert.deepEqual(j(mobCoc.COC_FULL), j(cocSandbox.window.COC_DATA.airlines));
+    assert.ok(mobCoc.COC_FULL.length >= 9, 'all airlines present');
+  });
+}

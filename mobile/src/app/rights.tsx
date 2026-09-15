@@ -10,6 +10,7 @@ import {
   RightCardView,
   SectionHeader,
 } from '@/components/rights-ui';
+import { CocDecoder } from '@/components/coc-decoder';
 import { CoverageChecker, GapTable } from '@/components/coverage-checker';
 import { Scorecard } from '@/components/scorecard';
 import { ThemedText } from '@/components/themed-text';
@@ -46,6 +47,13 @@ export default function RightsScreen() {
           subtitle="The answer is counterintuitive — and worth up to €600."
         />
         <CoverageChecker />
+
+        <SectionHeader
+          emoji="📜"
+          title="Your airline's own contract"
+          subtitle="The rules they wrote — with the rule number to quote back at them."
+        />
+        <CocDecoder />
 
         <SectionHeader
           emoji="💰"
