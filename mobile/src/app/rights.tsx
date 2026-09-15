@@ -10,6 +10,7 @@ import {
   RightCardView,
   SectionHeader,
 } from '@/components/rights-ui';
+import { CoverageChecker, GapTable } from '@/components/coverage-checker';
 import { Scorecard } from '@/components/scorecard';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
@@ -38,6 +39,13 @@ export default function RightsScreen() {
       ]}>
       <View style={styles.inner}>
         <Hero />
+
+        <SectionHeader
+          emoji="🌍"
+          title="Does EU law cover your flight?"
+          subtitle="The answer is counterintuitive — and worth up to €600."
+        />
+        <CoverageChecker />
 
         <SectionHeader
           emoji="💰"
@@ -85,6 +93,13 @@ export default function RightsScreen() {
         {LEGISLATION.map((l, i) => (
           <LawCardView key={i} law={l} />
         ))}
+
+        <SectionHeader
+          emoji="⚖️"
+          title="Same bad day, two continents"
+          subtitle="What you'd be owed in the U.S. versus in Europe."
+        />
+        <GapTable />
 
         <SectionHeader emoji="📊" title="The airlines, by the government’s numbers" subtitle="Same period, same metric, same source for every airline." />
         <Scorecard />

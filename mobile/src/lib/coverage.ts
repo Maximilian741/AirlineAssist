@@ -38,6 +38,55 @@ export const REGIONS: { id: Region; label: string; hint?: string }[] = [
   { id: 'other', label: 'Somewhere else' },
 ];
 
+export const CARRIERS: { id: CarrierRegion; label: string; hint?: string }[] = [
+  { id: 'us', label: 'A U.S. airline', hint: 'Delta, United, American, JetBlue…' },
+  { id: 'eu', label: 'An EU/EEA airline', hint: 'Air France, KLM, Lufthansa, Aer Lingus…' },
+  { id: 'uk', label: 'A UK airline', hint: 'British Airways, Virgin Atlantic, easyJet…' },
+  { id: 'ca', label: 'A Canadian airline', hint: 'Air Canada, WestJet' },
+  { id: 'other', label: 'Another country’s airline', hint: 'Emirates, Qatar, ANA…' },
+];
+
+/** What the same bad day pays in the U.S. versus in Europe. Kept in sync with public/coverage.js. */
+export type Gap = { scenario: string; us: string; eu: string; note: string };
+export const GAPS: Gap[] = [
+  {
+    scenario: '3-hour delay (airline’s fault), long-haul',
+    us: 'Nothing. No U.S. law requires cash for a delay.',
+    eu: '€600 cash, per person.',
+    note: 'The single biggest gap. A U.S. delay-compensation rule was proposed and then withdrawn in November 2025.',
+  },
+  {
+    scenario: 'Flight cancelled, you fly the next day',
+    us: 'A refund if you decline to travel — but if you take the rebooking, no payment.',
+    eu: '€250–€600 cash on top of the rebooking, unless they warned you 14+ days ahead.',
+    note: 'In the EU you get flown AND paid. In the U.S. you get flown.',
+  },
+  {
+    scenario: 'Stuck overnight during a controllable disruption',
+    us: 'Hotel and meals only if that airline voluntarily promised it on the DOT dashboard.',
+    eu: 'Hotel, transfers and meals are mandatory — “right to care,” regardless of the cause.',
+    note: 'EU care duties apply even for weather. U.S. commitments mostly don’t.',
+  },
+  {
+    scenario: 'The airline has no seat for days',
+    us: 'Rebooking on that airline; no legal right to be put on a competitor.',
+    eu: 'Re-routing “at the earliest opportunity” — which can mean buying you onto another airline.',
+    note: 'This is why EU passengers get home faster.',
+  },
+  {
+    scenario: 'Seeing the true price before you buy',
+    us: 'No upfront bag/change fee disclosure — that rule was struck down in February 2026.',
+    eu: 'All-inclusive final price, including taxes and unavoidable charges, from the first display.',
+    note: 'Airlines sued to stop U.S. price transparency, and won.',
+  },
+  {
+    scenario: 'Denied boarding on an oversold flight',
+    us: 'Real protection: 200%/400% of your fare, capped at $1,075 / $2,150, in cash.',
+    eu: '€250–€600 plus re-routing and care.',
+    note: 'The one area where U.S. law is genuinely strong — use it.',
+  },
+];
+
 const EU_AMOUNTS: Record<Band, string> = { short: '€250', medium: '€400', long: '€600' };
 const UK_AMOUNTS: Record<Band, string> = { short: '£220', medium: '£350', long: '£520' };
 

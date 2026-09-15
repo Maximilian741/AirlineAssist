@@ -30,7 +30,7 @@ export type Watch = { id: string; alerts: WatchAlert[]; checks?: number; lastChe
 
 let handlerInstalled = false;
 export function installHandler() {
-  if (handlerInstalled) return;
+  if (handlerInstalled || Platform.OS === 'web') return;
   handlerInstalled = true;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -151,6 +151,7 @@ export function computeEventsCore(trips: Trip[], watches: Record<string, Watch>,
  * Safe to call often: previously-notified keys are skipped.
  */
 export async function checkAndNotify(): Promise<{ fired: number; pending: number }> {
+  if (Platform.OS === 'web') return { fired: 0, pending: 0 };
   installHandler();
   const ok = await ensurePermission();
   const [trips, watches, notified] = await Promise.all([loadTrips(), fetchWatches(), loadNotified()]);
@@ -174,6 +175,7 @@ export async function checkAndNotify(): Promise<{ fired: number; pending: number
  * if the app hasn't been opened. Clears and re-schedules each time — idempotent.
  */
 export async function scheduleDeadlineReminders(): Promise<number> {
+  if (Platform.OS === 'web') return 0;
   installHandler();
   const ok = await ensurePermission();
   if (!ok) return 0;

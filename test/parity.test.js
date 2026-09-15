@@ -45,6 +45,15 @@ test('COVERAGE: web and mobile agree on every region × carrier × band combinat
   assert.equal(checked, 6 * 6 * 5 * 3, 'swept the full matrix');
 });
 
+test('COVERAGE: the picker options and the US-vs-EU gap table are identical on both platforms', () => {
+  // These drive the UI, not check() — so the sweep above would not catch a drifted label or a
+  // gap row edited on one side. Both are user-facing legal copy; they must not diverge.
+  assert.deepEqual(j(mobileCoverage.REGIONS), j(webCoverage.REGIONS));
+  assert.deepEqual(j(mobileCoverage.CARRIERS), j(webCoverage.CARRIERS));
+  assert.deepEqual(j(mobileCoverage.GAPS), j(webCoverage.GAPS));
+  assert.ok(mobileCoverage.GAPS.length >= 6, 'gap table is populated');
+});
+
 test('FARECLASS: web and mobile agree on every letter × tier', () => {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   for (const tier of ['platinum', 'reserve', 'gold']) {
