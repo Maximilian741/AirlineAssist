@@ -47,7 +47,22 @@ const NAME_TO_IATA = [
 const SIG_LEVER = 'This is a "significant change" under 14 CFR 260.2. You may DECLINE the new itinerary and take a full refund to your original payment — even on a nonrefundable or basic fare. Or use it as leverage for a free move to the flight you actually want.';
 const CONTRACT_LEVER = 'Ask for the flight you actually want, by flight number: "Your schedule change moved my flight. Please protect me on [flight] instead." Free.';
 
+// Registry limits. Every registration costs one live search, and every watch costs one more on every
+// sweep — so an unbounded registry is an unbounded outbound request rate against a shared IP (or a paid
+// Amadeus quota), not just a large file.
+const MAX_WATCHES = 500;
+const MAX_PER_OWNER = 50;
+// Alerts are levers, not a log. Past this, the oldest RETIRED ones are dropped; live ones are never dropped.
+const MAX_ALERTS = 20;
+
 const nowIso = () => new Date().toISOString();
+const todayUtc = () => new Date().toISOString().slice(0, 10);
+const addDays = (day, n) => {
+  const t = new Date(day + 'T00:00:00Z');
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
+const httpError = (message, status) => Object.assign(new Error(message), { status });
 
 function load() {
   const db = readJson(storeFile(), {});
@@ -55,6 +70,37 @@ function load() {
 }
 function save(db) {
   writeJson(storeFile(), db);
+}
+
+// ---------- ownership ----------
+
+/** The stored form of an owner key. Only the hash is written, so the registry file holds no usable key. */
+function hashOwner(owner) {
+  const s = String(owner == null ? '' : owner).trim();
+  if (!s) return null;
+  return createHash('sha256').update(s).digest('hex').slice(0, 32);
+}
+
+/** A watch with no owner yet (registered before owner keys existed) is open to the first key presented. */
+function readable(w, hash) {
+  if (!w) return false;
+  if (!w.ownerHash) return true;
+  return !!hash && w.ownerHash === hash;
+}
+
+/** Bind an unowned watch to the key in front of it. */
+function adopt(w, hash) {
+  if (!hash || w.ownerHash) return false;
+  w.ownerHash = hash;
+  return true;
+}
+
+/** Throws 403 if `id` already belongs to a different owner. Call before doing any work for a write. */
+export function assertOwner(id, owner) {
+  if (!id) return true;
+  const w = load()[id];
+  if (w && !readable(w, hashOwner(owner))) throw httpError('Forbidden', 403);
+  return true;
 }
 
 // ---------- identity ----------
@@ -414,19 +460,51 @@ function upsertMissing(w, missing) {
 }
 
 // ---------- registry ----------
+/** Every watch, for the server's own bookkeeping (the sweep). Never served to a client. */
 export function list() { return Object.values(load()); }
-export function get(id) { return load()[id] || null; }
-export function getMany(ids) { const db = load(); return (ids || []).map((id) => db[id]).filter(Boolean); }
+
+/**
+ * The caller's own watches, by id. A watch owned by someone else is simply not returned — the same
+ * answer as one that doesn't exist, so ids can't be probed. An unowned watch is adopted by this key.
+ */
+export function getMany(ids, owner) {
+  const hash = hashOwner(owner);
+  const db = load();
+  const out = [];
+  let changed = false;
+  for (const id of ids || []) {
+    const w = db[id];
+    if (!w || !readable(w, hash)) continue;
+    if (adopt(w, hash)) changed = true;
+    out.push(w);
+  }
+  if (changed) save(db);
+  return out;
+}
+export function get(id, owner) { return getMany([id], owner)[0] || null; }
 
 /** Register (or re-register) a trip. `offers` is a live search used to find the booking for its baseline. */
-export function register(trip, offers = null) {
+export function register(trip, offers = null, owner = null) {
   const db = load();
+  const hash = hashOwner(owner);
   const id = trip.id || 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const existing = db[id] || null;
+  // Never replace someone else's watch: an attacker who guessed an id could otherwise point a victim's
+  // alerts at a route they never booked.
+  if (existing && !readable(existing, hash)) throw httpError('Forbidden', 403);
+  if (!existing) {
+    const all = Object.values(db);
+    if (all.length >= MAX_WATCHES) throw httpError('The watchdog is full; unwatch a trip first.', 429);
+    if (hash && all.filter((w) => w.ownerHash === hash).length >= MAX_PER_OWNER) {
+      throw httpError(`At most ${MAX_PER_OWNER} watched trips per device.`, 429);
+    }
+  }
   const booking = cleanBooking(trip);
   const status = canWatch(trip) ? 'active' : 'unsupported';
   const found = status === 'active' ? findBooked(offers, booking) : null;
   db[id] = {
     id,
+    ownerHash: hash || (existing && existing.ownerHash) || null,
     origin: trip.origin, destination: trip.destination, departDate: trip.departDate, returnDate: trip.returnDate || null,
     zone: trip.zone || 'domestic', iata: iataFor(trip) || 'DL', tier: trip.tier || 'platinum',
     status,
@@ -444,8 +522,26 @@ export function register(trip, offers = null) {
   save(db);
   return db[id];
 }
-export function unregister(id) { const db = load(); delete db[id]; save(db); }
-export function ack(id) { const db = load(); if (db[id]) { db[id].alerts = (db[id].alerts || []).map((a) => ({ ...a, seen: true })); save(db); } return db[id] || null; }
+export function unregister(id, owner) {
+  const db = load();
+  const w = db[id];
+  if (!w) return false;
+  if (!readable(w, hashOwner(owner))) throw httpError('Forbidden', 403);
+  delete db[id];
+  save(db);
+  return true;
+}
+export function ack(id, owner) {
+  const db = load();
+  const w = db[id];
+  if (!w) return null;
+  const hash = hashOwner(owner);
+  if (!readable(w, hash)) throw httpError('Forbidden', 403);
+  adopt(w, hash);
+  w.alerts = (w.alerts || []).map((a) => ({ ...a, seen: true }));
+  save(db);
+  return w;
+}
 
 /**
  * One sweep: re-search every watched trip (paced), find the booking, diff it, record alerts.

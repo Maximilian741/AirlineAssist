@@ -400,11 +400,24 @@ window.Trips = (function () {
   // Register a trip so the SERVER re-checks it on a schedule and turns changes into money levers
   // (fare drops -> rebook; schedule shifts -> free change or cash refund). Fire-and-forget: if the
   // server isn't reachable the trip is still saved locally and manual checks still work.
+  // One random key per browser, kept beside the trips it protects. It is not an account: it only stops
+  // another device from reading, overwriting or deleting the watches this one registered.
+  function ownerKey() {
+    let k = null;
+    try { k = localStorage.getItem('ff-owner'); } catch { /* private mode */ }
+    if (!k) {
+      k = 'o' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try { localStorage.setItem('ff-owner', k); } catch { /* the watch just stays unowned */ }
+    }
+    return k;
+  }
+  const ownerHeaders = (extra) => Object.assign({ 'X-FF-Owner': ownerKey() }, extra || {});
+
   async function watch(trip) {
     if (!trip.origin || !trip.dest || !trip.departDate) return null;
     try {
       const res = await fetch('/api/watch', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: ownerHeaders({ 'Content-Type': 'application/json' }),
         // What identifies THE booking: the flight number typed, what was paid, and — for a trip saved from a
         // search result — that result's exact itinerary. Without them the watchdog can only name the route.
         body: JSON.stringify({ id: trip.id, origin: trip.origin, destination: trip.dest, departDate: trip.departDate, returnDate: trip.returnDate || '', tier: 'platinum', airline: trip.airline || '', flightNo: trip.flightNo || '', fare: trip.fare || '', itinerary: trip.itinerary || null }),
@@ -416,7 +429,7 @@ window.Trips = (function () {
     } catch { return null; }
   }
   async function unwatch(trip) {
-    try { await fetch('/api/watch/' + encodeURIComponent(trip.watchId || trip.id), { method: 'DELETE' }); } catch {}
+    try { await fetch('/api/watch/' + encodeURIComponent(trip.watchId || trip.id), { method: 'DELETE', headers: ownerHeaders() }); } catch {}
     update(trip.id, { watched: false });
   }
   /** Fetch alerts for every watched trip in one round-trip. Returns { byTripId, summary }. */
@@ -425,7 +438,7 @@ window.Trips = (function () {
     if (!ids.length) return { byTripId: {}, summary: { watches: 0, unseen: 0, moneyFound: 0 } };
     try {
       // Only this device's own watches.
-      const res = await fetch('/api/watch?ids=' + encodeURIComponent(ids.join(',')));
+      const res = await fetch('/api/watch?ids=' + encodeURIComponent(ids.join(',')), { headers: ownerHeaders() });
       if (!res.ok) return { byTripId: {}, summary: null };
       const data = await res.json();
       const byTripId = {};
@@ -446,7 +459,7 @@ window.Trips = (function () {
     return lost.length;
   }
   async function ackAlerts(trip) {
-    try { await fetch('/api/watch/' + encodeURIComponent(trip.watchId || trip.id) + '/ack', { method: 'POST' }); } catch {}
+    try { await fetch('/api/watch/' + encodeURIComponent(trip.watchId || trip.id) + '/ack', { method: 'POST', headers: ownerHeaders() }); } catch {}
   }
 
   return { all, add, update, remove, deadlines, upcoming, atStake, claimAnswers, claimDetails, fmt, today, daysBetween, airlineFromFlightNo, checkFare, moneyOnTable, watch, unwatch, pullAlerts, resync, ackAlerts };

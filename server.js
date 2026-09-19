@@ -107,11 +107,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/trend') return handleTrend(res, url);
 
     // ---- watchdog: register a trip, poll its alerts, force a sweep ----
-    if (url.pathname === '/api/watch' && req.method === 'POST') return await handleWatchRegister(req, res);
+    // Each device mints one random key and presents it here; the registry stores only its hash, and a
+    // watch answers to nobody else. No account, no identity — it means "same device", nothing more.
+    const owner = req.headers['x-ff-owner'] ? String(req.headers['x-ff-owner']).slice(0, 128) : null;
+    if (url.pathname === '/api/watch' && req.method === 'POST') return await handleWatchRegister(req, res, owner);
     if (url.pathname === '/api/watch' && req.method === 'GET') {
       // Only the caller's own watches, by trip id — never every user's routes, flights and fares.
       const ids = (url.searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200);
-      const watches = watchdog.getMany(ids);
+      const watches = watchdog.getMany(ids, owner);
       return json(res, { watches, summary: watchdog.summary(watches) });
     }
     if (url.pathname === '/api/watch/sweep' && req.method === 'POST') {
@@ -121,16 +124,17 @@ const server = http.createServer(async (req, res) => {
       return json(res, { ...r, summary: watchdog.summary() });
     }
     const wm = url.pathname.match(/^\/api\/watch\/([A-Za-z0-9_-]+)$/);
-    if (wm && req.method === 'GET') { const w = watchdog.get(wm[1]); return w ? json(res, w) : json(res, { error: 'Not found' }, 404); }
-    if (wm && req.method === 'DELETE') { watchdog.unregister(wm[1]); return json(res, { ok: true }); }
+    if (wm && req.method === 'GET') { const w = watchdog.get(wm[1], owner); return w ? json(res, w) : json(res, { error: 'Not found' }, 404); }
+    if (wm && req.method === 'DELETE') { watchdog.unregister(wm[1], owner); return json(res, { ok: true }); }
     const am = url.pathname.match(/^\/api\/watch\/([A-Za-z0-9_-]+)\/ack$/);
-    if (am && req.method === 'POST') return json(res, watchdog.ack(am[1]) || { error: 'Not found' });
+    if (am && req.method === 'POST') return json(res, watchdog.ack(am[1], owner) || { error: 'Not found' });
 
     if (url.pathname.startsWith('/api/')) return json(res, { error: 'Unknown endpoint' }, 404);
 
     return await serveStatic(url.pathname, res);
   } catch (err) {
     const message = String(err?.message || err);
+    if (err && err.status) return json(res, { error: message }, err.status);
     // A body we can't parse is the caller's mistake, not a server fault.
     return json(res, { error: message }, message === 'Invalid JSON body' ? 400 : 500);
   }
@@ -401,7 +405,7 @@ async function handleCalendar(req, res) {
 
 // Register a trip for automatic re-checking. Baselines from the current best offer so the very
 // first sweep can already detect a change.
-async function handleWatchRegister(req, res) {
+async function handleWatchRegister(req, res, owner) {
   const body = await readBody(req);
   const { origin = 'HLN', destination, departDate, returnDate, tier = 'platinum', id, airline, flightNo, fare, itinerary } = body || {};
   if (!destination || !departDate) return json(res, { error: 'destination and departDate are required.' }, 400);
@@ -415,7 +419,7 @@ async function handleWatchRegister(req, res) {
       if (!r.blocked && !r.degraded && !/sample|mock|fallback/i.test(String(r.source || ''))) offers = r.offers;
     } catch { /* baseline on the first sweep instead */ }
   }
-  const w = watchdog.register(trip, offers);
+  const w = watchdog.register(trip, offers, owner);
   return json(res, w);
 }
 

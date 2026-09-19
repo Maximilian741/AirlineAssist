@@ -19,6 +19,7 @@ import { API_BASE, HAS_API } from '@/config';
 import { deadlines, type Trip } from '@/lib/trips';
 
 const NOTIFIED_KEY = 'ff-notified';
+const OWNER_KEY = 'ff-owner';
 const TRIPS_KEY = 'ff-trips';
 
 export type WatchAlert = {
@@ -86,11 +87,25 @@ async function loadTrips(): Promise<Trip[]> {
 
 /** This device's own watches, by trip id. null when the server couldn't be asked, so callers don't mistake
  *  "unreachable" for "the server has none". */
+/** One random key per install, stored beside the trips it protects. Not an account: it only stops another
+ *  device from reading, overwriting or deleting the watches this one registered. */
+let ownerKey: string | null = null;
+async function ownerHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  if (!ownerKey) {
+    try { ownerKey = await AsyncStorage.getItem(OWNER_KEY); } catch { ownerKey = null; }
+    if (!ownerKey) {
+      ownerKey = 'o' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      await AsyncStorage.setItem(OWNER_KEY, ownerKey).catch(() => {});
+    }
+  }
+  return { 'X-FF-Owner': ownerKey, ...(extra || {}) };
+}
+
 export async function fetchWatchesOrNull(ids: string[]): Promise<Record<string, Watch> | null> {
   if (!HAS_API) return null;
   if (!ids.length) return {};
   try {
-    const res = await fetch(`${API_BASE}/api/watch?ids=${encodeURIComponent(ids.join(','))}`);
+    const res = await fetch(`${API_BASE}/api/watch?ids=${encodeURIComponent(ids.join(','))}`, { headers: await ownerHeaders() });
     if (!res.ok) return null;
     const data = await res.json();
     const out: Record<string, Watch> = {};
@@ -108,7 +123,7 @@ export async function watchTrip(t: Trip): Promise<boolean> {
   if (!HAS_API || !t.origin || !t.dest || !t.departDate) return false;
   try {
     const res = await fetch(`${API_BASE}/api/watch`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: await ownerHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ id: t.id, origin: t.origin, destination: t.dest, departDate: t.departDate, returnDate: t.returnDate || '', tier: 'platinum', airline: t.airline || '', flightNo: t.flightNo || '', fare: t.fare || '' }),
     });
     return res.ok;
@@ -118,7 +133,7 @@ export async function watchTrip(t: Trip): Promise<boolean> {
 /** Stop the server re-checking a trip that was removed from this device. */
 export async function unwatchTrip(id: string): Promise<void> {
   if (!HAS_API) return;
-  try { await fetch(`${API_BASE}/api/watch/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {}
+  try { await fetch(`${API_BASE}/api/watch/${encodeURIComponent(id)}`, { method: 'DELETE', headers: await ownerHeaders() }); } catch {}
 }
 
 /** Re-register upcoming trips the server lost (a free host wipes its disk when it sleeps or redeploys) or

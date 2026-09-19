@@ -374,11 +374,12 @@ window.RIGHTS_DATA = {
       name: "Airline Ancillary-Fee Transparency Rule",
       year: "2024",
       status: "Vacated — struck down by the courts; NOT in force",
-      summary: "This rule would have forced airlines and booking sites to show bag, carry-on, change, and cancellation fees while you shop. It was stayed before its effective date, the industry sued, and on February 3, 2026 the full Fifth Circuit (en banc) vacated it for skipping proper notice-and-comment.",
-      whyItMatters: "There is currently NO federal upfront-fee-disclosure rule for flights. Don't trust claims that one exists — research bag and change fees yourself before booking.",
+      summary: "This rule would have forced airlines and booking sites to show bag, carry-on, change, and cancellation fees while you shop. It was stayed before its effective date, the industry sued, and on February 3, 2026 the full Fifth Circuit (en banc) vacated it for skipping proper notice-and-comment. Vacating it reinstated the rules it had replaced, and DOT re-codified those at 91 Fed. Reg. 40368, effective July 2, 2026.",
+      whyItMatters: "What died was the all-in fee display inside search results. The older disclosure rules snapped back and are in force: 14 CFR 399.85 still makes airlines flag bag fees on the first screen that quotes your fare and itemize your allowance and carry-on / 1st / 2nd bag fees on your e-ticket confirmation. Change and cancellation fees are not covered — research those yourself before booking.",
       sources: [
         { label: "Federal Register — the (vacated) rule", url: "https://www.federalregister.gov/documents/2024/04/30/2024-08609/enhancing-transparency-of-airline-ancillary-service-fees" },
-        { label: "Fifth Circuit opinion (PDF)", url: "http://www.ca5.uscourts.gov/opinions/pub/24/24-60231-CV0.pdf" }
+        { label: "Federal Register — DOT restores the 2011 fee-disclosure rules", url: "https://www.federalregister.gov/d/2026-13450" },
+        { label: "Fifth Circuit opinion (PDF)", url: "https://www.ca5.uscourts.gov/opinions/pub/24/24-60231-CV1.pdf" }
       ]
     },
     {
