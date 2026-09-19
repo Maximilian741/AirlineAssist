@@ -132,3 +132,19 @@ test('record: better than industry across the board -> good, no warning; absent 
   const none = sec(BuyCheck.run({ airlineIndex: 0, fare: 300, fareType: 'main', from: 'us', to: 'us' }, { ...deps, scorecard: { report: null, airlines: [] } }), 'record');
   assert.equal(none, undefined);
 });
+
+test('the letter on the ticket beats the toggle: class E is Basic Economy, whatever was picked', () => {
+  const r = run({ airlineIndex: 0, fare: 240, fareType: 'main', bookingClass: 'E', needs: { change: true }, fromRegion: 'us', toRegion: 'us' });
+  const p = sec(r, 'price');
+  assert.ok(p.warns.some((w) => /can’t be changed/.test(w)), 'basic rules applied');
+  assert.ok(p.warns.some((w) => /class E, which IS Basic Economy/.test(w)), 'and it says why');
+  assert.ok(!p.warns.some((w) => /Changes on this fare: \$0/.test(w)), 'the Main change-fee line is gone');
+});
+
+test('a no-change-fee promise is qualified: it covers the standard fare, not the cheapest one on the flight', () => {
+  const r = run({ airlineIndex: 0, fare: 240, fareType: 'main', needs: { change: true }, fromRegion: 'us', toRegion: 'us' });
+  const p = sec(r, 'price');
+  assert.ok(p.warns.some((w) => /Changes on this fare: \$0/.test(w)));
+  assert.ok(p.warns.some((w) => /Main Classic and above/.test(w) && /can’t be changed at all/.test(w)));
+});
+

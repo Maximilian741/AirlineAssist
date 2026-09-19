@@ -13,7 +13,13 @@
 // Design: registrations live in data/watch.json (id -> trip + booking + baseline snapshot). Each sweep
 // re-searches the trip, finds the booking in the results, diffs it against its baseline, and records
 // alerts. Sweeps are PACED (the keyless source rate-limits by IP). Clients read their own watches by id.
+//
+// WHOSE WATCH. Each client mints one random owner key and keeps it on the device; it is presented on
+// every call and stored here only as a hash. A watch belongs to the first key that presents itself, and
+// no other key can read, overwrite, ack or delete it. There is still no account and no identity — the
+// key proves "same device", nothing more.
 
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

@@ -40,6 +40,10 @@ window.BuyCheck = (function () {
     const coc = deps.coc || window.COC_DATA;
     const sections = [];
     const f = fees[Number(inp.airlineIndex)] || null;
+    // The letter on the ticket outranks the toggle: class E IS Basic Economy, so a Main-fare report
+    // would be fiction. (fareclass.js is the source for that mapping.)
+    const klass = String(inp.bookingClass || '').trim().toUpperCase().slice(0, 1);
+    const fareType = klass === 'E' ? 'basic' : inp.fareType;
 
     // ---------- 1. the real price ----------
     if (f) {
@@ -52,9 +56,12 @@ window.BuyCheck = (function () {
       if (needs.seat) { const n = feeNum(f.seat); if (n) { add += n; lines.push(`Seat selection: up to +${money(n)}`); } }
       const total = fare + add;
       const warns = [];
-      if (inp.fareType === 'basic' && f.basicEconomy) warns.push('This airline’s basic fare strips: ' + f.basicEconomy);
-      if (inp.fareType === 'basic' && needs.change) warns.push('Basic fares usually can’t be changed — if plans shift, the whole fare is gone.');
-      if (inp.fareType !== 'basic' && needs.change && f.changeFee) warns.push('Changes on this fare: ' + f.changeFee);
+      if (fareType === 'basic' && f.basicEconomy) warns.push('This airline’s basic fare strips: ' + f.basicEconomy);
+      if (fareType === 'basic' && needs.change) warns.push('Basic fares usually can’t be changed — if plans shift, the whole fare is gone.');
+      if (fareType !== 'basic' && needs.change && f.changeFee) warns.push('Changes on this fare: ' + f.changeFee);
+      // "No change fees" is a promise about the standard fare, not the cheapest one on the same flight.
+      if (fareType !== 'basic' && needs.change) warns.push('That no-change-fee promise covers the standard fare (on Delta, Main Classic and above). The cheapest fare on the same flight — Main Basic / Basic Economy — still can’t be changed at all.');
+      if (klass === 'E' && inp.fareType !== 'basic') warns.push('You entered class E, which IS Basic Economy — this report uses the basic-fare rules, not the ones for the fare type you picked.');
       sections.push({
         kind: 'price',
         title: 'What it really costs',

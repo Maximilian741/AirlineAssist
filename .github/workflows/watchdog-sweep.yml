@@ -1,0 +1,46 @@
+# Runs the watchdog on the deployed site.
+#
+# WHY THIS EXISTS: the sweep is an in-process timer, and a free host spins the service down after
+# ~15 idle minutes — so a 6-hour interval never elapses and nobody's trips ever get re-checked.
+# This wakes the service on a schedule and asks it to sweep, which is the only thing that turns a
+# fare drop or a schedule change into an alert.
+#
+# SETUP (once, in the GitHub repo):
+#   Settings → Secrets and variables → Actions
+#     · Secret   SWEEP_TOKEN        — the same value set on the server's SWEEP_TOKEN env var.
+#                                     Without it on the server the endpoint is open to anyone.
+#     · Variable FAIRFARE_BASE_URL  — optional; defaults to the Render URL below.
+# Scheduled runs are disabled automatically on repos with no activity for 60 days — push, or press
+# "Run workflow", to re-arm them.
+
+name: Watchdog sweep
+
+on:
+  schedule:
+    - cron: '17 */6 * * *' # every six hours, off the hour (GitHub queues everything on :00)
+  workflow_dispatch: {}
+
+concurrency:
+  group: watchdog-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE: ${{ vars.FAIRFARE_BASE_URL || 'https://airlineassist.onrender.com' }}
+    steps:
+      - name: Wake the service
+        # A sleeping free instance takes ~30-50s to boot; retry until it answers.
+        run: curl -sS -m 90 --retry 5 --retry-all-errors --retry-delay 15 "$BASE/api/health" -o /dev/null -w 'health %{http_code} in %{time_total}s\n'
+
+      - name: Sweep every watch
+        run: |
+          code=$(curl -sS -m 600 -o sweep.json -w '%{http_code}' \
+            -X POST "$BASE/api/watch/sweep" \
+            -H "x-sweep-token: ${{ secrets.SWEEP_TOKEN }}")
+          echo "HTTP $code"
+          cat sweep.json || true
+          echo
+          test "$code" = "200"
