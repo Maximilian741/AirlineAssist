@@ -1,17 +1,22 @@
+/**
+ * The "built with Expo" footer mark: a hairline rule, the version in mono, the badge. Sits on
+ * whatever paper it is placed on — no tinted block of its own. See constants/theme.ts.
+ */
 import { version } from 'expo/package.json';
 import { Image } from 'expo-image';
-import { useColorScheme, StyleSheet } from 'react-native';
+import { useColorScheme, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export function WebBadge() {
   const scheme = useColorScheme();
+  const theme = useTheme();
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={[styles.container, { borderTopColor: theme.line }]}>
       <ThemedText type="code" themeColor="textSecondary" style={styles.versionText}>
         v{version}
       </ThemedText>
@@ -23,13 +28,15 @@ export function WebBadge() {
         }
         style={styles.badgeImage}
       />
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: Spacing.five,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Spacing.four,
+    paddingHorizontal: Spacing.three,
     alignItems: 'center',
     gap: Spacing.two,
   },

@@ -7,13 +7,16 @@
  * the verbatim quote, the words to say at the counter, and the catch.
  *
  * Data: data/coc-full.ts (generated from the web decode; parity-tested).
+ *
+ * Looks: the editorial system in constants/theme.ts — the provisions are an index in ONE
+ * hairline-ruled sheet, the contract is quoted in serif italic, oxblood is kept for the catch.
  */
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { COC_FULL, type CocProvision } from '@/data/coc-full';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -29,6 +32,7 @@ export function CocDecoder() {
   if (!a) return null;
 
   const pick = (i: number) => { setIdx(i); setOpen(null); };
+  const divider = { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line };
 
   return (
     <View>
@@ -39,7 +43,7 @@ export function CocDecoder() {
         numbers to quote.
       </ThemedText>
 
-      <ThemedText type="small" themeColor="textSecondary" style={styles.pickerLabel}>WHICH AIRLINE</ThemedText>
+      <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.pickerLabel}>WHICH AIRLINE</ThemedText>
       <View style={styles.chips}>
         {COC_FULL.map((x, i) => {
           const on = i === idx;
@@ -50,50 +54,63 @@ export function CocDecoder() {
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               accessibilityLabel={`Contract of carriage: ${shortName(x.airline)}`}
-              style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-              <ThemedText type="small" style={{ fontWeight: on ? '800' : '500' }}>{shortName(x.airline)}</ThemedText>
+              style={({ pressed }) => [
+                styles.chip,
+                { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' },
+                pressed ? styles.pressed : null,
+              ]}>
+              <ThemedText type="small" style={{ fontWeight: on ? '700' : '400' }}>{shortName(x.airline)}</ThemedText>
             </Pressable>
           );
         })}
       </View>
 
       <View style={styles.meta}>
-        <Pressable onPress={() => Linking.openURL(a.cocUrl.split(' ')[0]).catch(() => {})} hitSlop={8} style={styles.linkTap}>
+        <Pressable
+          onPress={() => Linking.openURL(a.cocUrl.split(' ')[0]).catch(() => {})}
+          hitSlop={8}
+          style={({ pressed }) => [styles.linkTap, pressed ? styles.pressed : null]}>
           <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>Read the full contract →</ThemedText>
         </Pressable>
         {a.confidence && a.confidence !== 'high' ? (
-          <ThemedText type="small" style={{ color: theme.warn, fontWeight: '700' }}>Verify before relying on this</ThemedText>
+          <ThemedText type="eyebrow" style={{ color: theme.warn }}>Verify before relying on this</ThemedText>
         ) : null}
       </View>
       {a.lastUpdated ? (
-        <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12, lineHeight: 17 }} numberOfLines={3}>{a.lastUpdated}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={3}>{a.lastUpdated}</ThemedText>
       ) : null}
 
-      {a.buriedGem ? (
-        <ThemedView type="card" style={[styles.card, { borderColor: theme.good, borderLeftColor: theme.good }]}>
-          <ThemedText style={styles.cardTitle}>The buried one</ThemedText>
-          <ThemedText type="small" style={styles.body}>{a.buriedGem}</ThemedText>
-        </ThemedView>
-      ) : null}
+      {/* The contract at a glance: one sheet of hairline-separated facts, not a stack of cards. */}
+      <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+        {a.buriedGem ? (
+          <View style={styles.sheetRow}>
+            <ThemedText style={styles.rowLabel}>The buried one</ThemedText>
+            <ThemedText type="small" style={styles.body}>{a.buriedGem}</ThemedText>
+          </View>
+        ) : null}
+        <View style={[styles.sheetRow, a.buriedGem ? divider : null]}>
+          <ThemedText style={styles.rowLabel}>Schedule change that triggers a refund</ThemedText>
+          <ThemedText type="small" style={styles.body}>{a.scheduleChangeThreshold}</ThemedText>
+        </View>
+        <View style={[styles.sheetRow, divider]}>
+          <ThemedText style={styles.rowLabel}>Will they put you on another airline?</ThemedText>
+          <ThemedText type="small" style={styles.body}>{a.rebooksOnOtherAirlines}</ThemedText>
+        </View>
+      </View>
 
-      <ThemedView type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.brand }]}>
-        <ThemedText type="smallBold" style={styles.factK}>Schedule change that triggers a refund</ThemedText>
-        <ThemedText type="small" style={styles.body}>{a.scheduleChangeThreshold}</ThemedText>
-        <ThemedText type="smallBold" style={[styles.factK, { marginTop: 10 }]}>Will they put you on another airline?</ThemedText>
-        <ThemedText type="small" style={styles.body}>{a.rebooksOnOtherAirlines}</ThemedText>
-      </ThemedView>
-
-      <ThemedText type="small" themeColor="textSecondary" style={[styles.pickerLabel, { marginTop: 14 }]}>
+      <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.sectionLabel}>
         WHAT YOU CAN QUOTE AT THEM ({a.provisions.length})
       </ThemedText>
-      {a.provisions.map((p, i) => (
-        <Provision key={p.topic + i} p={p} open={open === i} onToggle={() => setOpen(open === i ? null : i)} theme={theme} />
-      ))}
+      <View style={[styles.sheet, styles.sheetFlush, { backgroundColor: theme.card, borderColor: theme.line }]}>
+        {a.provisions.map((p, i) => (
+          <Provision key={p.topic + i} p={p} first={i === 0} open={open === i} onToggle={() => setOpen(open === i ? null : i)} theme={theme} />
+        ))}
+      </View>
     </View>
   );
 }
 
-function Provision({ p, open, onToggle, theme }: { p: CocProvision; open: boolean; onToggle: () => void; theme: Theme }) {
+function Provision({ p, open, onToggle, theme, first }: { p: CocProvision; open: boolean; onToggle: () => void; theme: Theme; first?: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (!p.howToUse) return;
@@ -104,17 +121,17 @@ function Provision({ p, open, onToggle, theme }: { p: CocProvision; open: boolea
     } catch {}
   };
   return (
-    <ThemedView type="card" style={[styles.prov, { borderColor: open ? theme.brand : theme.line }]}>
+    <View style={first ? null : { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        style={styles.provHead}>
+        style={({ pressed }) => [styles.provHead, pressed ? styles.pressed : null]}>
         <View style={{ flex: 1 }}>
-          <ThemedText style={{ fontWeight: '700', fontSize: 14.5, lineHeight: 20 }}>{p.topic}</ThemedText>
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700', fontSize: 12, marginTop: 2 }}>{p.ruleNumber}</ThemedText>
+          <ThemedText style={styles.provTopic}>{p.topic}</ThemedText>
+          <ThemedText type="eyebrow" style={{ color: theme.brand, marginTop: 3 }}>{p.ruleNumber}</ThemedText>
         </View>
-        <ThemedText style={{ color: theme.textSecondary, fontSize: 18, paddingLeft: 8 }}>{open ? '−' : '+'}</ThemedText>
+        <ThemedText style={[styles.toggle, { color: theme.textSecondary }]}>{open ? '−' : '+'}</ThemedText>
       </Pressable>
       {open ? (
         <View style={styles.provBody}>
@@ -122,43 +139,55 @@ function Provision({ p, open, onToggle, theme }: { p: CocProvision; open: boolea
           <ThemedText type="small" style={styles.body}>{p.plainEnglish}</ThemedText>
           {p.exactQuote ? (
             <View style={[styles.quote, { borderLeftColor: theme.line }]}>
-              <ThemedText type="small" style={{ fontStyle: 'italic', lineHeight: 19 }}>“{p.exactQuote}”</ThemedText>
+              <ThemedText style={styles.quoteText}>“{p.exactQuote}”</ThemedText>
             </View>
           ) : null}
           {p.howToUse ? (
-            <ThemedView type="backgroundElement" style={styles.say}>
+            <View style={[styles.say, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
               <View style={styles.sayHead}>
-                <ThemedText type="smallBold">How to invoke it</ThemedText>
-                <Pressable onPress={copy} hitSlop={8} style={styles.copyTap} accessibilityLabel="Copy what to say">
+                <ThemedText type="eyebrow" themeColor="textSecondary">How to invoke it</ThemedText>
+                <Pressable
+                  onPress={copy}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.copyTap, pressed ? styles.pressed : null]}
+                  accessibilityLabel="Copy what to say">
                   <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{copied ? 'Copied' : 'Copy'}</ThemedText>
                 </Pressable>
               </View>
               <ThemedText type="small" style={styles.body}>{p.howToUse}</ThemedText>
-            </ThemedView>
+            </View>
           ) : null}
-          {p.catch ? <ThemedText type="small" style={[styles.body, { color: theme.warn }]}><ThemedText type="smallBold" style={{ color: theme.warn }}>The catch: </ThemedText>{p.catch}</ThemedText> : null}
+          {p.catch ? <ThemedText type="small" style={styles.body}><ThemedText type="smallBold" style={{ color: theme.bad }}>The catch: </ThemedText>{p.catch}</ThemedText> : null}
         </View>
       ) : null}
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  lede: { lineHeight: 20, marginBottom: 12 },
-  pickerLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, marginBottom: 6 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9, minHeight: 44, justifyContent: 'center' },
-  meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 10 },
+  lede: { marginBottom: Spacing.three },
+  pickerLabel: { marginBottom: Spacing.two },
+  sectionLabel: { marginTop: Spacing.four, marginBottom: Spacing.two },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.three - 4, paddingVertical: Spacing.two, minHeight: 44, justifyContent: 'center' },
+  meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.three, marginTop: Spacing.two },
   linkTap: { minHeight: 44, justifyContent: 'center' },
-  card: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 8, padding: 12, marginTop: 10 },
-  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
-  factK: { fontSize: 13 },
-  body: { lineHeight: 19, marginTop: 4 },
-  prov: { borderWidth: 1, borderRadius: 8, marginTop: 8, overflow: 'hidden' },
-  provHead: { flexDirection: 'row', alignItems: 'center', padding: 12, minHeight: 56 },
-  provBody: { paddingHorizontal: 12, paddingBottom: 12 },
-  quote: { borderLeftWidth: 3, paddingLeft: 10, marginTop: 8 },
-  say: { borderRadius: 8, padding: 10, marginTop: 10 },
+
+  // one sheet, hairline-separated rows
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden', marginTop: Spacing.three },
+  sheetFlush: { marginTop: 0 },
+  sheetRow: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  rowLabel: { fontFamily: Fonts.serif, fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  body: { marginTop: Spacing.one + 2 },
+
+  provHead: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, minHeight: 56 },
+  provTopic: { fontFamily: Fonts.serif, fontSize: 16.5, lineHeight: 22, fontWeight: '700' },
+  toggle: { fontSize: 19, paddingLeft: Spacing.two },
+  provBody: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.three },
+  quote: { borderLeftWidth: 2, paddingLeft: Spacing.two + 2, marginTop: Spacing.two + 2 },
+  quoteText: { fontFamily: Fonts.serif, fontStyle: 'italic', fontSize: 14.5, lineHeight: 21 },
+  say: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.two + 2, marginTop: Spacing.three },
   sayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   copyTap: { minHeight: 36, minWidth: 44, alignItems: 'flex-end', justifyContent: 'center' },
+  pressed: { opacity: 0.75 },
 });

@@ -5,8 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { EVIDENCE, SCENARIOS, type CrisisScenario } from '@/data/crisis';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -25,26 +24,45 @@ export default function CrisisScreen() {
           <Scenario s={scenario} theme={theme} onBack={() => setScenario(null)} />
         ) : (
           <>
-            <ThemedText style={styles.h1}>What's happening?</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.three, lineHeight: 21 }}>
+            <ThemedText type="display">What's happening?</ThemedText>
+            <View style={[styles.rule, { backgroundColor: theme.line }]} />
+            <ThemedText type="lede" themeColor="textSecondary" style={styles.standfirst}>
               The next 20 minutes decide most of the money. Pick the situation — you'll get exactly what to do, what to say, and what not to accept.
             </ThemedText>
-            {SCENARIOS.map((s) => (
-              <Pressable key={s.id} onPress={() => setScenario(s)} style={({ pressed }) => [styles.card, { borderColor: theme.line, backgroundColor: theme.card }, pressed && { opacity: 0.7 }]}>
-                <ThemedText style={{ fontWeight: '700', fontSize: 15.5, flex: 1 }}>{s.title}</ThemedText>
-                <ThemedText style={{ color: theme.bad, fontWeight: '800', fontSize: 17 }}>→</ThemedText>
-              </Pressable>
-            ))}
-            <ThemedView type="backgroundElement" style={[styles.evidence, { borderColor: theme.line }]}>
-              <ThemedText style={{ fontWeight: '800', fontSize: 14, marginBottom: 6 }}>Whatever it is — start collecting now</ThemedText>
-              {EVIDENCE.map((e, i) => (
-                <ThemedText key={i} type="small" themeColor="textSecondary" style={{ lineHeight: 21 }}>• {e}</ThemedText>
+
+            {/* An index of situations: one sheet, hairline-ruled — not a stack of floating cards. */}
+            <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+              {SCENARIOS.map((s, i) => (
+                <Pressable key={s.id} onPress={() => setScenario(s)} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+                  <View style={[styles.pickRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+                    <ThemedText style={styles.pickTitle}>{s.title}</ThemedText>
+                    <ThemedText style={[styles.arrow, { color: theme.bad }]}>→</ThemedText>
+                  </View>
+                </Pressable>
               ))}
-            </ThemedView>
+            </View>
+
+            <View style={[styles.panel, { borderColor: theme.line }]}>
+              <ThemedText type="eyebrow" themeColor="textSecondary">Whatever it is — start collecting now</ThemedText>
+              <View style={styles.list}>
+                {EVIDENCE.map((e, i) => (
+                  <Bullet key={i} text={e} />
+                ))}
+              </View>
+            </View>
           </>
         )}
       </View>
     </ScrollView>
+  );
+}
+
+function Bullet({ text }: { text: string }) {
+  return (
+    <View style={styles.bullet}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.dot}>•</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.flex1}>{text}</ThemedText>
+    </View>
   );
 }
 
@@ -53,50 +71,61 @@ function Scenario({ s, theme, onBack }: { s: CrisisScenario; theme: Theme; onBac
   const [copied, setCopied] = useState(false);
   return (
     <View>
-      <ThemedText style={styles.h1}>{s.title}</ThemedText>
-      <View style={{ marginTop: Spacing.two, gap: 11 }}>
+      <ThemedText type="display">{s.title}</ThemedText>
+      <View style={[styles.rule, { backgroundColor: theme.line }]} />
+
+      {/* The running order, numbered: one sheet, a hairline between each move. */}
+      <View style={[styles.sheet, styles.afterRule, { backgroundColor: theme.card, borderColor: theme.line }]}>
         {s.now.map((n, i) => (
-          <View key={i} style={styles.step}>
+          <View key={i} style={[styles.step, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
             <View style={[styles.num, { backgroundColor: theme.brandDeep }]}>
-              <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{i + 1}</ThemedText>
+              <ThemedText style={styles.numText}>{i + 1}</ThemedText>
             </View>
-            <ThemedText type="small" style={{ flex: 1, lineHeight: 21 }}>{n}</ThemedText>
+            <ThemedText type="small" style={styles.flex1}>{n}</ThemedText>
           </View>
         ))}
       </View>
 
-      <ThemedView type="backgroundElement" style={[styles.say, { borderLeftColor: theme.good }]}>
-        <ThemedText style={{ fontWeight: '800', fontSize: 13, marginBottom: 5 }}>Word for word, at the counter</ThemedText>
-        <ThemedText type="small" style={{ fontStyle: 'italic', lineHeight: 21 }}>{s.say}</ThemedText>
+      <View style={[styles.say, { backgroundColor: theme.backgroundElement, borderColor: theme.line, borderLeftColor: theme.good }]}>
+        <ThemedText type="eyebrow" themeColor="textSecondary">Word for word, at the counter</ThemedText>
+        <ThemedText type="lede" style={styles.quote}>{s.say}</ThemedText>
         <Pressable
           onPress={async () => { await Clipboard.setStringAsync(s.say); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-          style={({ pressed }) => [styles.copyBtn, { borderColor: theme.line }, pressed && { opacity: 0.7 }]}>
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{copied ? 'Copied' : 'Copy the script'}</ThemedText>
+          style={({ pressed }) => (pressed ? styles.pressed : null)}>
+          <View style={[styles.copyBtn, { borderColor: theme.line }]}>
+            <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{copied ? 'Copied' : 'Copy the script'}</ThemedText>
+          </View>
         </Pressable>
-      </ThemedView>
+      </View>
 
-      <ThemedView type="backgroundElement" style={[styles.evidence, { borderColor: theme.line }]}>
-        <ThemedText style={{ fontWeight: '800', fontSize: 13, marginBottom: 5 }}>Collect</ThemedText>
-        {s.collect.map((c, i) => (
-          <ThemedText key={i} type="small" themeColor="textSecondary" style={{ lineHeight: 21 }}>• {c}</ThemedText>
-        ))}
-      </ThemedView>
+      <View style={[styles.panel, { borderColor: theme.line }]}>
+        <ThemedText type="eyebrow" themeColor="textSecondary">Collect</ThemedText>
+        <View style={styles.list}>
+          {s.collect.map((c, i) => (
+            <Bullet key={i} text={c} />
+          ))}
+        </View>
+      </View>
 
-      <ThemedView type="card" style={[styles.warn, { borderColor: theme.warn }]}>
-        <ThemedText type="small" style={{ lineHeight: 20 }}>Don’t accept: {s.dontAccept}</ThemedText>
-      </ThemedView>
-      <ThemedView type="card" style={[styles.money, { borderColor: theme.good, backgroundColor: theme.goodBg }]}>
-        <ThemedText type="small" style={{ lineHeight: 20 }}>{s.money}</ThemedText>
-      </ThemedView>
+      <View style={[styles.note, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.warn }]}>
+        <ThemedText type="small">Don’t accept: {s.dontAccept}</ThemedText>
+      </View>
+      <View style={[styles.note, { backgroundColor: theme.goodBg, borderColor: theme.line, borderLeftColor: theme.good }]}>
+        <ThemedText type="small">{s.money}</ThemedText>
+      </View>
 
-      <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three, flexWrap: 'wrap' }}>
+      <View style={styles.actions}>
         {s.claimType ? (
-          <Pressable onPress={() => router.push({ pathname: '/owed', params: { type: s.claimType } })} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand }, pressed && { opacity: 0.7 }]}>
-            <ThemedText style={{ color: '#fff', fontWeight: '800' }}>Later: see what this is worth →</ThemedText>
+          <Pressable onPress={() => router.push({ pathname: '/owed', params: { type: s.claimType } })} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+            <View style={[styles.cta, { backgroundColor: theme.brandDeep }]}>
+              <ThemedText style={styles.ctaText}>Later: see what this is worth →</ThemedText>
+            </View>
           </Pressable>
         ) : null}
-        <Pressable onPress={onBack} style={({ pressed }) => [styles.cta, { borderWidth: 1.5, borderColor: theme.line }, pressed && { opacity: 0.7 }]}>
-          <ThemedText style={{ fontWeight: '700' }}>← Other situations</ThemedText>
+        <Pressable onPress={onBack} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+          <View style={[styles.cta, styles.ctaGhost, { borderColor: theme.line }]}>
+            <ThemedText style={[styles.ctaGhostText, { color: theme.brand }]}>← Other situations</ThemedText>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -106,14 +135,39 @@ function Scenario({ s, theme, onBack }: { s: CrisisScenario; theme: Theme; onBac
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth },
-  h1: { fontSize: 22, fontWeight: '800' },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 12, padding: 15, marginBottom: 9 },
-  evidence: { borderWidth: 1, borderRadius: 10, padding: 13, marginTop: Spacing.three },
-  step: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
-  num: { width: 24, height: 24, borderRadius: 5, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  say: { borderLeftWidth: 4, borderRadius: 10, padding: 13, marginTop: Spacing.three },
-  copyBtn: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 7, marginTop: 9 },
-  warn: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: Spacing.two },
-  money: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: Spacing.two },
-  cta: { borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
+  flex1: { flex: 1 },
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  afterRule: { marginTop: Spacing.four },
+  standfirst: { marginTop: Spacing.three, marginBottom: Spacing.four },
+
+  // the situation index
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  pickTitle: { flex: 1, fontFamily: Fonts.serif, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  arrow: { fontSize: 17 },
+
+  // the numbered moves
+  step: { flexDirection: 'row', gap: Spacing.two + 2, alignItems: 'flex-start', paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  num: { width: 22, height: 22, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  numText: { color: '#fdfbf5', fontWeight: '700', fontSize: 12.5, lineHeight: 20, fontVariant: ['tabular-nums'] },
+
+  // the script
+  say: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.four },
+  quote: { fontFamily: Fonts.serif, fontStyle: 'italic', marginTop: Spacing.two },
+  copyBtn: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.three, marginTop: Spacing.three },
+
+  // evidence + the two notes
+  panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, padding: Spacing.three, marginTop: Spacing.four },
+  list: { marginTop: Spacing.two, gap: Spacing.one + 1 },
+  bullet: { flexDirection: 'row', gap: Spacing.two },
+  dot: { width: 9 },
+  note: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.three },
+
+  // actions
+  actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four, flexWrap: 'wrap' },
+  cta: { minHeight: 44, borderRadius: Radius.sm, paddingVertical: Spacing.two + 4, paddingHorizontal: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { color: '#fdfbf5', fontWeight: '700', fontSize: 15 },
+  ctaGhost: { borderWidth: StyleSheet.hairlineWidth },
+  ctaGhostText: { fontWeight: '700', fontSize: 15 },
+  pressed: { opacity: 0.75 },
 });

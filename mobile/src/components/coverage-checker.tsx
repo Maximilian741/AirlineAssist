@@ -6,13 +6,17 @@
  * point of the tool — arriving INTO the EU is only covered on an EU carrier — so the UI asks the
  * three questions that decide it and shows what each regime does and does not pay.
  *
+ * Set like the rest of the app (constants/theme.ts): the questions are one bordered form sheet of
+ * hairline-separated fields, the verdict is a serif headline, and the findings are one ruled sheet
+ * with a thin spine — green where a law pays, brand where it is background, none where it doesn't.
+ *
  * All rules come from lib/coverage.ts, which is parity-tested against the web module.
  */
 import { useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { CARRIERS, check, GAPS, REGIONS, type Band, type CarrierRegion, type Region } from '@/lib/coverage';
 
@@ -33,6 +37,7 @@ export function CoverageChecker() {
   const [band, setBand] = useState<Band>('long');
 
   const res = useMemo(() => check({ from, to, carrier, band }), [from, to, carrier, band]);
+  const hasFindings = res.covered.length + res.notCovered.length + res.alsoKnow.length > 0;
 
   return (
     <View>
@@ -42,49 +47,78 @@ export function CoverageChecker() {
         to €600 cash. Most Americans never find out.
       </ThemedText>
 
-      <Picker label="Flying from" options={REGIONS} value={from} onPick={(v) => setFrom(v as Region)} theme={theme} />
-      <Picker label="Flying to" options={REGIONS} value={to} onPick={(v) => setTo(v as Region)} theme={theme} />
-      <Picker label="On" options={CARRIERS} value={carrier} onPick={(v) => setCarrier(v as CarrierRegion)} theme={theme} />
-      <Picker label="Distance" options={BANDS} value={band} onPick={(v) => setBand(v as Band)} theme={theme} />
+      {/* The four questions as one form sheet, not four loose blocks. */}
+      <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+        <Picker first label="Flying from" options={REGIONS} value={from} onPick={(v) => setFrom(v as Region)} theme={theme} />
+        <Picker label="Flying to" options={REGIONS} value={to} onPick={(v) => setTo(v as Region)} theme={theme} />
+        <Picker label="On" options={CARRIERS} value={carrier} onPick={(v) => setCarrier(v as CarrierRegion)} theme={theme} />
+        <Picker label="Distance" options={BANDS} value={band} onPick={(v) => setBand(v as Band)} theme={theme} />
+      </View>
 
-      <ThemedText style={[styles.headline, { color: res.covered.length ? theme.good : theme.text }]}>
-        {res.headline}
-      </ThemedText>
+      <View style={[styles.rule, { backgroundColor: theme.line }]} />
+      <ThemedText type="section" style={styles.headline}>{res.headline}</ThemedText>
 
-      {res.covered.map((c, i) => (
-        <ThemedView key={'y' + i} type="card" style={[styles.card, { borderColor: theme.good, borderLeftColor: theme.good }]}>
-          <View style={styles.cardHead}>
-            <ThemedText style={styles.regime}>{c.regime}</ThemedText>
-            {c.amount ? <ThemedText style={{ color: theme.good, fontWeight: '800', fontSize: 15 }}>{c.amount}</ThemedText> : null}
-          </View>
-          <ThemedText type="small" style={styles.body}>{c.why}</ThemedText>
-          <ThemedText type="small" style={styles.body}><ThemedText type="smallBold">Pays: </ThemedText>{c.pays}</ThemedText>
-          {c.deadline ? <ThemedText type="small" themeColor="textSecondary" style={styles.body}>{c.deadline}</ThemedText> : null}
-          <Pressable onPress={() => Linking.openURL(c.url).catch(() => {})} hitSlop={8} style={styles.linkTap}>
-            <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{c.rule} →</ThemedText>
-          </Pressable>
-        </ThemedView>
-      ))}
+      {hasFindings ? (
+        <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          {res.covered.map((c, i) => (
+            <View
+              key={'y' + i}
+              style={[
+                styles.entry,
+                { borderLeftWidth: 3, borderLeftColor: theme.good },
+                i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line },
+              ]}>
+              <View style={styles.entryHead}>
+                <ThemedText style={[styles.regime, styles.regimeGrow]}>{c.regime}</ThemedText>
+                {c.amount ? <ThemedText type="money" style={{ color: theme.good }}>{c.amount}</ThemedText> : null}
+              </View>
+              <ThemedText type="small" style={styles.body}>{c.why}</ThemedText>
+              <ThemedText type="small" style={styles.body}><ThemedText type="smallBold">Pays: </ThemedText>{c.pays}</ThemedText>
+              {c.deadline ? <ThemedText type="small" themeColor="textSecondary" style={styles.body}>{c.deadline}</ThemedText> : null}
+              <Pressable
+                onPress={() => Linking.openURL(c.url).catch(() => {})}
+                hitSlop={8}
+                style={({ pressed }) => [styles.linkTap, pressed ? styles.pressed : null]}>
+                <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{c.rule} →</ThemedText>
+              </Pressable>
+            </View>
+          ))}
 
-      {res.notCovered.map((c, i) => (
-        <ThemedView key={'n' + i} type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.line }]}>
-          <ThemedText style={[styles.regime, { color: theme.textSecondary }]}>{c.regime} — not covered</ThemedText>
-          <ThemedText type="small" style={styles.body}>{c.why}</ThemedText>
-          {c.tip ? <ThemedText type="small" themeColor="textSecondary" style={styles.body}>{c.tip}</ThemedText> : null}
-        </ThemedView>
-      ))}
+          {res.notCovered.map((c, i) => (
+            <View
+              key={'n' + i}
+              style={[
+                styles.entry,
+                (i > 0 || res.covered.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line },
+              ]}>
+              <ThemedText style={[styles.regime, { color: theme.textSecondary }]}>{c.regime} — not covered</ThemedText>
+              <ThemedText type="small" style={styles.body}>{c.why}</ThemedText>
+              {c.tip ? <ThemedText type="small" themeColor="textSecondary" style={styles.body}>{c.tip}</ThemedText> : null}
+            </View>
+          ))}
 
-      {res.alsoKnow.map((k, i) => (
-        <ThemedView key={'k' + i} type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.brand }]}>
-          <ThemedText style={styles.regime}>{k.title}</ThemedText>
-          <ThemedText type="small" style={styles.body}>{k.detail}</ThemedText>
-        </ThemedView>
-      ))}
+          {res.alsoKnow.map((k, i) => (
+            <View
+              key={'k' + i}
+              style={[
+                styles.entry,
+                { borderLeftWidth: 3, borderLeftColor: theme.brand },
+                (i > 0 || res.covered.length + res.notCovered.length > 0) && {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: theme.line,
+                },
+              ]}>
+              <ThemedText style={styles.regime}>{k.title}</ThemedText>
+              <ThemedText type="small" style={styles.body}>{k.detail}</ThemedText>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
 
-/** The same bad day, priced in the U.S. and in Europe. */
+/** The same bad day, priced in the U.S. and in Europe. One sheet, one scenario per ruled row. */
 export function GapTable() {
   const theme = useTheme();
   return (
@@ -92,34 +126,39 @@ export function GapTable() {
       <ThemedText type="small" themeColor="textSecondary" style={styles.lede}>
         The same disruption, side by side. This is what airlines lobby to keep out of U.S. law.
       </ThemedText>
-      {GAPS.map((g, i) => (
-        <ThemedView key={i} type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.warn }]}>
-          <ThemedText style={styles.regime}>{g.scenario}</ThemedText>
-          <View style={styles.gapRow}>
-            <ThemedText type="small" style={[styles.gapTag, { color: theme.bad }]}>U.S.</ThemedText>
-            <ThemedText type="small" style={styles.gapText}>{g.us}</ThemedText>
+      <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+        {GAPS.map((g, i) => (
+          <View
+            key={i}
+            style={[styles.entry, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+            <ThemedText style={styles.regime}>{g.scenario}</ThemedText>
+            <View style={styles.gapRow}>
+              <ThemedText type="eyebrow" style={[styles.gapTag, { color: theme.bad }]}>U.S.</ThemedText>
+              <ThemedText type="small" style={styles.gapText}>{g.us}</ThemedText>
+            </View>
+            <View style={styles.gapRow}>
+              <ThemedText type="eyebrow" style={[styles.gapTag, { color: theme.good }]}>EU</ThemedText>
+              <ThemedText type="small" style={styles.gapText}>{g.eu}</ThemedText>
+            </View>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.note}>{g.note}</ThemedText>
           </View>
-          <View style={styles.gapRow}>
-            <ThemedText type="small" style={[styles.gapTag, { color: theme.good }]}>EU</ThemedText>
-            <ThemedText type="small" style={styles.gapText}>{g.eu}</ThemedText>
-          </View>
-          <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6, lineHeight: 18, fontSize: 12.5 }}>{g.note}</ThemedText>
-        </ThemedView>
-      ))}
+        ))}
+      </View>
     </View>
   );
 }
 
-function Picker({ label, options, value, onPick, theme }: {
+function Picker({ label, options, value, onPick, theme, first }: {
   label: string;
   options: { id: string; label: string; hint?: string }[];
   value: string;
   onPick: (v: string) => void;
   theme: Theme;
+  first?: boolean;
 }) {
   return (
-    <View style={{ marginBottom: 10 }}>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.pickerLabel}>{label.toUpperCase()}</ThemedText>
+    <View style={[styles.field, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+      <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.fieldLabel}>{label}</ThemedText>
       <View style={styles.chips}>
         {options.map((o) => {
           const on = o.id === value;
@@ -130,8 +169,12 @@ function Picker({ label, options, value, onPick, theme }: {
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               accessibilityLabel={`${label}: ${o.label}`}
-              style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-              <ThemedText type="small" style={{ fontWeight: on ? '800' : '500' }}>{o.label}</ThemedText>
+              style={({ pressed }) => [
+                styles.chip,
+                { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' },
+                pressed ? styles.pressed : null,
+              ]}>
+              <ThemedText type="small" style={{ fontWeight: on ? '700' : '400' }}>{o.label}</ThemedText>
             </Pressable>
           );
         })}
@@ -141,17 +184,38 @@ function Picker({ label, options, value, onPick, theme }: {
 }
 
 const styles = StyleSheet.create({
-  lede: { lineHeight: 20, marginBottom: 12 },
-  pickerLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, marginBottom: 6 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9, minHeight: 44, justifyContent: 'center' },
-  headline: { fontSize: 16, fontWeight: '800', lineHeight: 22, marginTop: 10, marginBottom: 4 },
-  card: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 8, padding: 12, marginTop: 8 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 },
-  regime: { fontSize: 15, fontWeight: '800' },
-  body: { lineHeight: 19, marginTop: 3 },
-  linkTap: { marginTop: 8, minHeight: 36, justifyContent: 'center' },
-  gapRow: { flexDirection: 'row', gap: 8, marginTop: 5, alignItems: 'flex-start' },
-  gapTag: { width: 34, fontWeight: '800', fontSize: 12 },
-  gapText: { flex: 1, lineHeight: 19 },
+  lede: { marginBottom: Spacing.three },
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+
+  // form
+  field: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  fieldLabel: { marginBottom: Spacing.two },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.three - 4,
+    paddingVertical: Spacing.two + 2,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+
+  // verdict
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.four },
+  headline: { marginTop: Spacing.three, marginBottom: Spacing.three },
+
+  // findings
+  entry: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  entryHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: Spacing.two + 2 },
+  regime: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 23, fontWeight: '700' },
+  regimeGrow: { flex: 1 }, // only inside the row that carries the amount
+  body: { marginTop: Spacing.one + 1 },
+  linkTap: { marginTop: Spacing.two + 2, minHeight: 44, justifyContent: 'center' },
+  pressed: { opacity: 0.75 },
+
+  // the U.S. / EU comparison
+  gapRow: { flexDirection: 'row', gap: Spacing.two + 2, marginTop: Spacing.two, alignItems: 'flex-start' },
+  gapTag: { width: 40, paddingTop: 4 },
+  gapText: { flex: 1 },
+  note: { marginTop: Spacing.two },
 });

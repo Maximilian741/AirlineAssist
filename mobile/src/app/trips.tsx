@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TrendBlock } from '@/components/trend-block';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { API_BASE, HAS_API } from '@/config';
 import { AIRLINES } from '@/data/airlines';
 import { FAREDROP, FAREDROP_VERIFIED } from '@/data/faredrop';
@@ -119,52 +119,70 @@ export default function TripsScreen() {
       <View style={styles.inner}>
         {!trips.length && !claims.length ? (
           <View style={styles.hero}>
-            <ThemedText style={{ fontSize: 40 }}>🧳</ThemedText>
-            <ThemedText style={styles.heroTitle}>Never miss a deadline again</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.heroText}>
+            <ThemedText type="display">Never miss a deadline again</ThemedText>
+            <View style={[styles.rule, { backgroundColor: theme.line }]} />
+            <ThemedText type="lede" themeColor="textSecondary" style={styles.heroText}>
               Every way to get money back from an airline has a clock on it — some as short as 7 days. Save a trip and this counts every one down, then files the claim with your details already filled in.
             </ThemedText>
-            <Pressable onPress={() => setEditing({ id: '', region: 'us', payment: 'credit', issue: 'none' })} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand }, pressed && { opacity: 0.7 }]}>
-              <ThemedText style={styles.ctaText}>＋ Add your first trip</ThemedText>
+            <Pressable
+              onPress={() => setEditing({ id: '', region: 'us', payment: 'credit', issue: 'none' })}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.btnPrimary, styles.heroBtn, { backgroundColor: theme.brandDeep }, pressed && styles.pressed]}>
+              <ThemedText style={styles.btnPrimaryText}>＋ Add your first trip</ThemedText>
             </Pressable>
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two, textAlign: 'center' }}>
-              Trips are stored on this device, with no account. To watch fares, only the route and dates are checked on our server — never your name or confirmation number.
-            </ThemedText>
+            <ThemedView type="backgroundElement" style={[styles.note, { borderColor: theme.line }]}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Trips are stored on this device, with no account. To watch fares, only the route and dates are checked on our server — never your name or confirmation number.
+              </ThemedText>
+            </ThemedView>
           </View>
         ) : (
           <>
             {soon.length ? (
-              <ThemedView type="card" style={[styles.alert, { borderColor: theme.warn }]}>
-                <ThemedText type="small" style={{ fontWeight: '800', color: theme.warn }}>
-                  ⏰ {soon.length} deadline{soon.length === 1 ? '' : 's'} in the next 2 weeks
+              <ThemedView type="card" style={[styles.banner, { borderColor: theme.line, borderLeftColor: theme.bad }]}>
+                <ThemedText type="eyebrow" style={{ color: theme.bad }}>
+                  {soon.length} deadline{soon.length === 1 ? '' : 's'} in the next 2 weeks
                 </ThemedText>
-                <ThemedText type="small" style={{ marginTop: 2 }}>
+                <ThemedText type="small" style={styles.bannerLine}>
                   {soon[0].d.label} — {soon[0].d.daysLeft <= 0 ? 'due today' : soon[0].d.daysLeft + ' day' + (soon[0].d.daysLeft === 1 ? '' : 's') + ' left'}
                 </ThemedText>
               </ThemedView>
             ) : null}
             <View style={styles.listHead}>
-              <ThemedText style={{ fontWeight: '800' }}>{trips.length} trip{trips.length === 1 ? '' : 's'} tracked</ThemedText>
-              <Pressable onPress={() => setEditing({ id: '', region: 'us', payment: 'credit', issue: 'none' })} hitSlop={8}>
-                <ThemedText type="small" style={{ color: theme.brand, fontWeight: '800' }}>＋ Add trip</ThemedText>
+              <ThemedText type="section">{trips.length} trip{trips.length === 1 ? '' : 's'} tracked</ThemedText>
+              <Pressable
+                onPress={() => setEditing({ id: '', region: 'us', payment: 'credit', issue: 'none' })}
+                hitSlop={8}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.btnGhost, { borderColor: theme.line }, pressed && styles.pressed]}>
+                <ThemedText type="smallBold" style={{ color: theme.brand }}>＋ Add trip</ThemedText>
               </Pressable>
             </View>
+            <View style={[styles.rule, styles.headRule, { backgroundColor: theme.line }]} />
             {claims.length ? (
-              <View style={{ marginBottom: 12 }}>
-                <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.4, marginBottom: 6 }}>CLAIMS IN PROGRESS</ThemedText>
-                {claims.map((c) => {
-                  const na = nextAction(c);
-                  const blown = timeline(c).filter((t) => t.status === 'overdue').length;
-                  const route = [c.details?.origin, c.details?.dest].filter(Boolean).join(' → ') || c.details?.airline || 'Claim';
-                  return (
-                    <Pressable key={c.id} onPress={() => router.push({ pathname: '/owed', params: { claimId: c.id } })} style={({ pressed }) => [styles.card, { borderColor: blown ? theme.bad : theme.line, marginBottom: 8 }, pressed && { opacity: 0.7 }]}>
-                      <ThemedText style={{ fontSize: 15, fontWeight: '800' }}>{route}{c.amount ? `  ·  ${c.amount}` : ''}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 2 }}>{c.details?.airline || ''}{c.filings.length ? ` · filed ${fmtDay(c.filings[0].date)}` : ''}{blown ? ` · ${blown} clock${blown === 1 ? '' : 's'} blown` : ''}</ThemedText>
-                      <ThemedText type="small" style={{ marginTop: 6, lineHeight: 18, color: na.kind === 'escalate' ? theme.bad : theme.text, fontWeight: na.kind === 'escalate' ? '700' : '400' }}>{na.text}</ThemedText>
-                      <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700', marginTop: 6 }}>Open →</ThemedText>
-                    </Pressable>
-                  );
-                })}
+              <View style={styles.claimsBlock}>
+                <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.claimsHead}>CLAIMS IN PROGRESS</ThemedText>
+                <ThemedView type="card" style={[styles.sheet, { borderColor: theme.line }]}>
+                  {claims.map((c, i) => {
+                    const na = nextAction(c);
+                    const blown = timeline(c).filter((t) => t.status === 'overdue').length;
+                    const route = [c.details?.origin, c.details?.dest].filter(Boolean).join(' → ') || c.details?.airline || 'Claim';
+                    return (
+                      <Pressable key={c.id} onPress={() => router.push({ pathname: '/owed', params: { claimId: c.id } })} accessibilityRole="button" style={({ pressed }) => (pressed ? styles.pressed : null)}>
+                        <View style={[
+                          styles.claimRow,
+                          { borderLeftColor: blown ? theme.bad : 'transparent' },
+                          i ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line } : null,
+                        ]}>
+                          <ThemedText style={styles.claimRoute}>{route}{c.amount ? `  ·  ${c.amount}` : ''}</ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary" style={styles.claimMeta}>{c.details?.airline || ''}{c.filings.length ? ` · filed ${fmtDay(c.filings[0].date)}` : ''}{blown ? ` · ${blown} clock${blown === 1 ? '' : 's'} blown` : ''}</ThemedText>
+                          <ThemedText type="small" style={{ marginTop: Spacing.two, lineHeight: 19, color: na.kind === 'escalate' ? theme.bad : theme.text, fontWeight: na.kind === 'escalate' ? '700' : '400' }}>{na.text}</ThemedText>
+                          <ThemedText type="smallBold" style={{ color: theme.brand, marginTop: Spacing.two }}>Open →</ThemedText>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ThemedView>
               </View>
             ) : null}
             {trips.map((t) => (
@@ -204,17 +222,17 @@ function FareDropPlaybook({ airline, drop, theme }: { airline?: string; drop?: n
       ? `On ${p.name}, repricing works only in some cases: ${p.notes || p.changeFee || ''}`
       : `On ${p.name}, standard tickets can’t be repriced after purchase${p.changeFee ? ` (${p.changeFee})` : ''}. ${p.notes || ''}`;
   return (
-    <ThemedView type="backgroundElement" style={[styles.fdBlock, { borderColor: theme.line }]}>
-      <ThemedText type="small" style={{ fontWeight: '700', lineHeight: 19 }}>{head}</ThemedText>
+    <ThemedView type="card" style={[styles.fdBlock, { borderColor: theme.line }]}>
+      <ThemedText type="smallBold" style={{ lineHeight: 19 }}>{head}</ThemedText>
       {p.howTo.map((step, i) => (
         <ThemedText key={i} type="small" style={{ lineHeight: 19, marginTop: 2 }}>{i + 1}. {step}</ThemedText>
       ))}
-      {p.basicEconomy ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4 }}>Basic Economy: {p.basicEconomy}</ThemedText> : null}
+      {p.basicEconomy ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.one }}>Basic Economy: {p.basicEconomy}</ThemedText> : null}
       {p.creditExpiry ? <ThemedText type="small" themeColor="textSecondary">Credit expiry: {p.creditExpiry}</ThemedText> : null}
       {p.sameDayNote ? <ThemedText type="small" themeColor="textSecondary">{p.sameDayNote}</ThemedText> : null}
       {p.sourceUrls[0] ? (
-        <Pressable onPress={() => Linking.openURL(p.sourceUrls[0])} hitSlop={6} style={{ marginTop: 4 }}>
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{p.name}’s policy →{FAREDROP_VERIFIED ? `  (verified ${FAREDROP_VERIFIED})` : ''}</ThemedText>
+        <Pressable onPress={() => Linking.openURL(p.sourceUrls[0])} hitSlop={6} accessibilityRole="link" style={({ pressed }) => [styles.inlineLink, pressed && styles.pressed]}>
+          <ThemedText type="smallBold" style={{ color: theme.brand }}>{p.name}’s policy →{FAREDROP_VERIFIED ? `  (verified ${FAREDROP_VERIFIED})` : ''}</ThemedText>
         </Pressable>
       ) : null}
     </ThemedView>
@@ -233,17 +251,17 @@ function WatchAlerts({ watch, theme, tripId, airline }: { watch?: Watch; theme: 
         : '';
   const alerts = watch.status === 'unsupported' ? [] : (watch.alerts || []).filter((a) => a.kind !== 'minor_change' && !a.resolved);
   if (!alerts.length) {
-    return <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>{why || `Watchdog on it — no changes to your flight yet${watch.checks ? ` (checked ${watch.checks}×)` : ''}.`}</ThemedText>;
+    return <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>{why || `Watchdog on it — no changes to your flight yet${watch.checks ? ` (checked ${watch.checks}×)` : ''}.`}</ThemedText>;
   }
   return (
-    <View style={{ marginTop: 8, gap: 7 }}>
+    <View style={{ marginTop: Spacing.two, gap: Spacing.two }}>
       {why ? <ThemedText type="small" themeColor="textSecondary">{why}</ThemedText> : null}
       {alerts.map((a, i) => (
-        <ThemedView key={i} type="card" style={[styles.wdAlert, { borderColor: theme.line, borderLeftColor: a.severity === 'high' ? theme.good : theme.warn }]}>
-          <ThemedText style={{ fontWeight: '800', fontSize: 14 }}>{a.title}{!a.seen ? <ThemedText style={{ color: theme.good, fontSize: 11, fontWeight: '800' }}>  NEW</ThemedText> : null}</ThemedText>
+        <ThemedView key={i} type="backgroundElement" style={[styles.wdAlert, { borderColor: theme.line, borderLeftColor: a.severity === 'high' ? theme.good : theme.warn }]}>
+          <ThemedText type="smallBold" style={styles.wdTitle}>{a.title}{!a.seen ? <ThemedText style={[styles.wdNew, { color: theme.good }]}>  NEW</ThemedText> : null}</ThemedText>
           <ThemedText type="small" style={{ marginTop: 3, lineHeight: 19 }}>{a.detail}</ThemedText>
           {a.lever ? (
-            <ThemedView style={[styles.wdLever, { backgroundColor: theme.goodBg }]}>
+            <ThemedView type="card" style={[styles.wdLever, { borderColor: theme.line, borderLeftColor: theme.good }]}>
               <ThemedText type="small" style={{ lineHeight: 19 }}><ThemedText type="smallBold">Do this: </ThemedText>{a.lever}{a.rule ? ` (${a.rule})` : ''}</ThemedText>
             </ThemedView>
           ) : null}
@@ -255,8 +273,9 @@ function WatchAlerts({ watch, theme, tripId, airline }: { watch?: Watch; theme: 
                 const routeChange = /connection|different airport/i.test(a.detail || '') ? '1' : '0';
                 router.push({ pathname: '/owed', params: { tripId, type: 'schedule', delta: String(a.delta ?? ''), route: routeChange, earlier: /earlier/i.test(a.detail || '') ? '1' : '0', from: a.was || legSummary(watch.baseline?.[leg]), to: a.now || legSummary(watch.latest?.[leg]) } });
               }}
-              style={({ pressed }) => [styles.wdBtn, { backgroundColor: theme.brand }, pressed && { opacity: 0.7 }]}>
-              <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 13.5 }}>Write the refund request →</ThemedText>
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.wdBtn, { backgroundColor: theme.brandDeep }, pressed && styles.pressed]}>
+              <ThemedText style={styles.btnSmallText}>Write the refund request →</ThemedText>
             </Pressable>
           ) : null}
         </ThemedView>
@@ -305,49 +324,59 @@ function TripCard({ t, watch, theme, onEdit, onDelete, onClaim }: { t: Trip; wat
   }
   const route = [t.origin, t.dest].filter(Boolean).join(' → ') || '—';
   return (
-    <ThemedView type="card" style={[styles.card, { borderColor: theme.line }]}>
-      <View style={styles.cardHead}>
-        <View style={{ flex: 1 }}>
-          <ThemedText style={{ fontSize: 16, fontWeight: '800' }}>{route}{t.flightNo ? '  ' + t.flightNo : ''}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">{t.airline || 'Airline not set'}{t.departDate ? ' · ' + fmt(t.departDate) : ''}</ThemedText>
+    <ThemedView type="card" style={[styles.sheet, styles.tripSheet, { borderColor: theme.line }]}>
+      <View style={styles.cardBody}>
+        <View style={styles.cardHead}>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.cardRoute}>{route}{t.flightNo ? '  ' + t.flightNo : ''}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">{t.airline || 'Airline not set'}{t.departDate ? ' · ' + fmt(t.departDate) : ''}</ThemedText>
+          </View>
+          <Pressable onPress={onEdit} hitSlop={8} accessibilityRole="button" style={styles.headAction}><ThemedText type="smallBold" style={{ color: theme.brand }}>Edit</ThemedText></Pressable>
+          <Pressable onPress={onDelete} hitSlop={8} accessibilityRole="button" accessibilityLabel="Remove trip" style={[styles.headAction, styles.headActionLast]}><ThemedText type="small" themeColor="textSecondary">✕</ThemedText></Pressable>
         </View>
-        <Pressable onPress={onEdit} hitSlop={8} style={{ minHeight: 36, justifyContent: 'center' }}><ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>Edit</ThemedText></Pressable>
-        <Pressable onPress={onDelete} hitSlop={8} style={{ minHeight: 36, justifyContent: 'center', marginLeft: 12 }}><ThemedText type="small" themeColor="textSecondary">✕</ThemedText></Pressable>
+        {hasIssue ? (
+          <ThemedView type="backgroundElement" style={[styles.issue, { borderColor: theme.line, borderLeftColor: theme.bad }]}>
+            <ThemedText type="smallBold" style={{ color: theme.bad }}>{ISSUE_LABELS[t.issue as TripIssue]}</ThemedText>
+            {stake ? <ThemedText type="money" style={{ color: theme.good, marginTop: Spacing.one }}>You may be owed {stake}</ThemedText> : null}
+          </ThemedView>
+        ) : null}
+        <WatchAlerts watch={watch} theme={theme} tripId={t.id} airline={t.airline} />
+        {t.origin && t.dest && t.departDate ? (
+          <TrendBlock origin={t.origin} destination={t.dest} departDate={t.departDate} returnDate={t.returnDate} paid={t.fare ? Number(t.fare) || null : null} refreshKey={(watch?.checks || 0) * 1000 + checkBump} />
+        ) : null}
       </View>
-      {hasIssue ? (
-        <ThemedView type="backgroundElement" style={styles.issue}>
-          <ThemedText type="small">⚠ {ISSUE_LABELS[t.issue as TripIssue]}</ThemedText>
-          {stake ? <ThemedText type="small" style={{ color: theme.good, fontWeight: '800', marginTop: 2 }}>You may be owed {stake}</ThemedText> : null}
-        </ThemedView>
-      ) : null}
-      <WatchAlerts watch={watch} theme={theme} tripId={t.id} airline={t.airline} />
-      {t.origin && t.dest && t.departDate ? (
-        <TrendBlock origin={t.origin} destination={t.dest} departDate={t.departDate} returnDate={t.returnDate} paid={t.fare ? Number(t.fare) || null : null} refreshKey={(watch?.checks || 0) * 1000 + checkBump} />
-      ) : null}
       {dls.slice(0, 5).map((d) => <DeadlineRow key={d.key} d={d} theme={theme} />)}
-      {!dls.length ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>No open deadlines. If something went wrong, tap Edit and say what happened.</ThemedText> : null}
-      {checkNote ? <ThemedText type="small" style={{ marginTop: 8, lineHeight: 19, fontWeight: /dropped/.test(checkNote) ? '700' : '400', color: /dropped/.test(checkNote) ? theme.good : theme.text }}>{checkNote}</ThemedText> : null}
-      {canCheck ? (
-        <Pressable onPress={checkFare} disabled={checking} hitSlop={6} style={{ marginTop: 8, minHeight: 36, justifyContent: 'center', alignSelf: 'flex-start' }}>
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{checking ? 'Checking today’s fare…' : 'Check today’s fare →'}</ThemedText>
+      <View style={[styles.cardFoot, { borderTopColor: theme.line }]}>
+        {!dls.length ? <ThemedText type="small" themeColor="textSecondary">No open deadlines. If something went wrong, tap Edit and say what happened.</ThemedText> : null}
+        {checkNote ? <ThemedText type="small" style={{ lineHeight: 19, fontWeight: /dropped/.test(checkNote) ? '700' : '400', color: /dropped/.test(checkNote) ? theme.good : theme.text }}>{checkNote}</ThemedText> : null}
+        {canCheck ? (
+          <Pressable onPress={checkFare} disabled={checking} hitSlop={6} accessibilityRole="button" style={({ pressed }) => [styles.inlineLink, pressed && styles.pressed]}>
+            <ThemedText type="smallBold" style={{ color: theme.brand }}>{checking ? 'Checking today’s fare…' : 'Check today’s fare →'}</ThemedText>
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={hasIssue ? onClaim : onEdit}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            hasIssue ? styles.btnPrimary : styles.btnGhost,
+            hasIssue ? { backgroundColor: theme.brandDeep } : { borderColor: theme.line },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText style={hasIssue ? styles.btnPrimaryText : [styles.btnGhostText, { color: theme.brand }]}>{hasIssue ? 'See what I’m owed & file it →' : 'Something go wrong on this trip?'}</ThemedText>
         </Pressable>
-      ) : null}
-      <Pressable onPress={hasIssue ? onClaim : onEdit} style={({ pressed }) => [styles.cta, { backgroundColor: hasIssue ? theme.brand : 'transparent', borderWidth: hasIssue ? 0 : 1.5, borderColor: theme.line, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
-        <ThemedText style={hasIssue ? styles.ctaText : { fontWeight: '700' }}>{hasIssue ? '💸 See what I’m owed & file it →' : 'Something go wrong on this trip?'}</ThemedText>
-      </Pressable>
+      </View>
     </ThemedView>
   );
 }
 
 function DeadlineRow({ d, theme }: { d: Deadline; theme: Theme }) {
   const c = d.status === 'urgent' ? theme.bad : d.status === 'soon' ? theme.warn : theme.good;
-  const bg = d.status === 'urgent' ? theme.badBg : d.status === 'soon' ? theme.warnBg : 'transparent';
   const when = d.daysLeft <= 0 ? 'Due today' : d.daysLeft === 1 ? '1 day left' : `${d.daysLeft} days left`;
   return (
-    <View style={[styles.dl, { borderLeftColor: c, backgroundColor: bg }]}>
-      <ThemedText type="small" style={{ fontWeight: '800', color: c, fontSize: 12.5 }}>{when}</ThemedText>
+    <View style={[styles.dl, { borderLeftColor: d.status === 'urgent' || d.status === 'soon' ? c : 'transparent', borderTopColor: theme.line }]}>
+      <ThemedText type="eyebrow" style={[styles.dlWhen, { color: c }]}>{when}</ThemedText>
       <ThemedText type="small" style={{ flex: 1 }}>{d.label}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>{fmt(d.due)}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.dlDue}>{fmt(d.due)}</ThemedText>
     </View>
   );
 }
@@ -357,7 +386,7 @@ function DeadlineRow({ d, theme }: { d: Deadline; theme: Theme }) {
 function FormField({ label, value, onChange, ph, kb, theme }: { label: string; value?: string; onChange: (v: string) => void; ph?: string; kb?: 'numeric'; theme: Theme }) {
   return (
     <View style={styles.field}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12 }}>{label}</ThemedText>
+      <ThemedText type="eyebrow" themeColor="textSecondary">{label}</ThemedText>
       <TextInput
         value={value || ''}
         onChangeText={onChange}
@@ -374,14 +403,23 @@ function FormField({ label, value, onChange, ph, kb, theme }: { label: string; v
 
 function FormChips<T extends string>({ label, opts, cur, onPick, theme }: { label: string; opts: { v: T; l: string }[]; cur?: T; onPick: (v: T) => void; theme: Theme }) {
   return (
-    <View style={{ marginTop: Spacing.two }}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12, marginBottom: 5 }}>{label}</ThemedText>
+    <View style={styles.chipGroup}>
+      <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.chipLabel}>{label}</ThemedText>
       <View style={styles.chipWrap}>
         {opts.map((o) => {
           const on = cur === o.v;
           return (
-            <Pressable key={o.v} onPress={() => onPick(o.v)} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-              <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>{o.l}</ThemedText>
+            <Pressable
+              key={o.v}
+              onPress={() => onPick(o.v)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [
+                styles.chip,
+                { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="small" style={{ fontWeight: on ? '700' : '600', color: on ? theme.brandDeep : theme.textSecondary }}>{o.l}</ThemedText>
             </Pressable>
           );
         })}
@@ -405,8 +443,9 @@ function TripForm({ trip, theme, onSave, onCancel }: { trip: Trip; theme: Theme;
 
   return (
     <View>
-      <ThemedText style={{ fontSize: 22, fontWeight: '800' }}>{trip.id ? 'Edit trip' : 'Add a trip'}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>Only the airline and date are needed. The more you add, the more it can file for you later.</ThemedText>
+      <ThemedText type="display">{trip.id ? 'Edit trip' : 'Add a trip'}</ThemedText>
+      <View style={[styles.rule, { backgroundColor: theme.line }]} />
+      <ThemedText type="lede" themeColor="textSecondary" style={styles.formLede}>Only the airline and date are needed. The more you add, the more it can file for you later.</ThemedText>
       <FormChips label="Airline" opts={AIRLINES.map((a) => ({ v: shortName(a.name), l: shortName(a.name) }))} cur={t.airline} onPick={(v) => set('airline', v)} theme={theme} />
       <View style={styles.grid}>
         <FormField label="Flight #" value={t.flightNo} onChange={(v) => set('flightNo', v)} ph="DL1234" theme={theme} />
@@ -434,12 +473,12 @@ function TripForm({ trip, theme, onSave, onCancel }: { trip: Trip; theme: Theme;
           theme={theme}
         />
       ) : null}
-      <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four }}>
-        <Pressable onPress={() => onSave(t)} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand, flex: 1 }, pressed && { opacity: 0.7 }]}>
-          <ThemedText style={styles.ctaText}>{trip.id ? 'Save changes' : 'Save trip'}</ThemedText>
+      <View style={styles.formButtons}>
+        <Pressable onPress={() => onSave(t)} accessibilityRole="button" style={({ pressed }) => [styles.btnPrimary, { backgroundColor: theme.brandDeep, flex: 1 }, pressed && styles.pressed]}>
+          <ThemedText style={styles.btnPrimaryText}>{trip.id ? 'Save changes' : 'Save trip'}</ThemedText>
         </Pressable>
-        <Pressable onPress={onCancel} style={({ pressed }) => [styles.cta, { borderWidth: 1.5, borderColor: theme.line }, pressed && { opacity: 0.7 }]}>
-          <ThemedText style={{ fontWeight: '700' }}>Cancel</ThemedText>
+        <Pressable onPress={onCancel} accessibilityRole="button" style={({ pressed }) => [styles.btnGhost, { borderColor: theme.line }, pressed && styles.pressed]}>
+          <ThemedText style={[styles.btnGhostText, { color: theme.brand }]}>Cancel</ThemedText>
         </Pressable>
       </View>
     </View>
@@ -449,24 +488,71 @@ function TripForm({ trip, theme, onSave, onCancel }: { trip: Trip; theme: Theme;
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth },
-  hero: { alignItems: 'center', paddingVertical: Spacing.four, gap: 6 },
-  heroTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  heroText: { textAlign: 'center', maxWidth: 520, lineHeight: 21 },
-  alert: { borderWidth: 1.5, borderRadius: 12, padding: 12, marginBottom: Spacing.three },
-  listHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.two },
-  card: { borderWidth: 1, borderRadius: 14, padding: 15, marginBottom: 13 },
+
+  // ---- rhythm: a rule under a title, an eyebrow over a block ----
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  headRule: { marginTop: 0, marginBottom: Spacing.three },
+
+  // ---- empty state: an editorial opening, not a centred icon hero ----
+  hero: { paddingTop: Spacing.two },
+  heroText: { marginTop: Spacing.three, maxWidth: 560 },
+  heroBtn: { alignSelf: 'flex-start', marginTop: Spacing.four },
+  note: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.four },
+
+  // ---- the deadline banner: hairline sheet with an oxblood spine ----
+  banner: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginBottom: Spacing.four },
+  bannerLine: { marginTop: Spacing.one + 2, lineHeight: 20 },
+
+  listHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.two },
+
+  // ---- one sheet, hairline-separated rows ----
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+  claimsBlock: { marginBottom: Spacing.four },
+  claimsHead: { marginBottom: Spacing.two },
+  claimRow: { borderLeftWidth: 3, paddingVertical: Spacing.three, paddingRight: Spacing.three, paddingLeft: Spacing.three - 3 },
+  claimRoute: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 23, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  claimMeta: { marginTop: 2 },
+
+  // ---- trip sheet ----
+  tripSheet: { marginBottom: Spacing.three },
+  cardBody: { padding: Spacing.three },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start' },
-  issue: { borderRadius: 9, padding: 10, marginTop: 10 },
-  dl: { flexDirection: 'row', alignItems: 'center', gap: 10, borderLeftWidth: 4, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10, marginTop: 6 },
-  cta: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center', marginTop: Spacing.three },
-  ctaText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.two },
-  field: { width: '47%', flexGrow: 1, gap: 4 },
-  input: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
-  wdAlert: { borderWidth: 1, borderLeftWidth: 4, borderRadius: 8, padding: 10 },
-  wdLever: { borderRadius: 6, padding: 8, marginTop: 6 },
-  fdBlock: { borderWidth: 1, borderRadius: 6, padding: 9, marginTop: 6 },
-  wdBtn: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8, minHeight: 36, justifyContent: 'center' },
+  cardRoute: { fontFamily: Fonts.serif, fontSize: 19, lineHeight: 25, fontWeight: '700' },
+  headAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.two },
+  headActionLast: { marginLeft: Spacing.one, marginRight: -Spacing.two },
+  issue: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.two + 2, marginTop: Spacing.three },
+  cardFoot: { borderTopWidth: StyleSheet.hairlineWidth, padding: Spacing.three, gap: Spacing.two + 2 },
+
+  // ---- deadlines: full-bleed rows, a spine for the clock that is running out ----
+  dl: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two + 2, borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, paddingVertical: Spacing.two + 2, paddingRight: Spacing.three, paddingLeft: Spacing.three - 3 },
+  dlWhen: { minWidth: 92, fontVariant: ['tabular-nums'] },
+  dlDue: { fontSize: 12.5, fontVariant: ['tabular-nums'] },
+
+  // ---- buttons ----
+  btnPrimary: { borderRadius: Radius.sm, paddingVertical: Spacing.three - 3, paddingHorizontal: Spacing.four, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  btnPrimaryText: { color: '#fdfbf5', fontWeight: '700', fontSize: 15 },
+  btnGhost: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  btnGhostText: { fontWeight: '700', fontSize: 14.5 },
+  btnSmallText: { color: '#fdfbf5', fontWeight: '700', fontSize: 14 },
+  inlineLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  pressed: { opacity: 0.75 },
+
+  // ---- form ----
+  formLede: { marginTop: Spacing.three, marginBottom: Spacing.two },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.three },
+  field: { width: '47%', flexGrow: 1, gap: Spacing.one + 1 },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two + 2, paddingVertical: 11, fontSize: 16, minHeight: 44 },
+  chipGroup: { marginTop: Spacing.three },
+  chipLabel: { marginBottom: Spacing.two },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two - 2 },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.three - 2, minHeight: 44, justifyContent: 'center' },
+  formButtons: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.five },
+
+  // ---- watchdog ----
+  wdAlert: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.two + 2 },
+  wdTitle: { fontSize: 14.5 },
+  wdNew: { fontSize: 10.5, fontWeight: '700', letterSpacing: 1 },
+  wdLever: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.two, marginTop: Spacing.two },
+  fdBlock: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.two + 2, marginTop: Spacing.two },
+  wdBtn: { alignSelf: 'flex-start', borderRadius: Radius.sm, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, marginTop: Spacing.two + 2, minHeight: 44, justifyContent: 'center' },
 });

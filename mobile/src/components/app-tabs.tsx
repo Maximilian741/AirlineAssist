@@ -5,14 +5,24 @@ import { Colors } from '@/constants/theme';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const dark = scheme === 'dark';
+  const colors = Colors[dark ? 'dark' : 'light'];
+  // The chosen tab wears the solid accent — deep navy on paper, its light counterpart at night —
+  // and every other tab is quiet secondary ink. Same two tones as the web app's tab row.
+  const active = dark ? colors.brand : colors.brandDeep;
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
+      backgroundColor={colors.card}
       indicatorColor={colors.backgroundSelected}
-      tintColor={colors.brand}
-      labelStyle={{ selected: { color: colors.brand } }}>
+      tintColor={active}
+      // The bar's separator (a hairline rule on iOS), not a drop shadow: the system has none.
+      shadowColor={colors.line}
+      iconColor={{ default: colors.textSecondary, selected: active }}
+      labelStyle={{
+        default: { color: colors.textSecondary, fontWeight: '600' },
+        selected: { color: active, fontWeight: '700' },
+      }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="airplane" md="flight" />

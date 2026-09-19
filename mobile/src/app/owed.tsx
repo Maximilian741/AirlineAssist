@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClaimTrackerView, loadClaims, useClaimTracker } from '@/components/claim-tracker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { AIRLINES } from '@/data/airlines';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -237,26 +237,33 @@ export default function OwedScreen() {
           <QuestionView key={(q as Question).id} q={q as Question} count={history.length} onAnswer={answer} onBack={back} theme={theme} />
         ) : (
           <>
-            <ThemedText style={styles.headline} themeColor="brandDeep">{res.headline}</ThemedText>
-            {res.entitlements.map((e, i) => (
-              <EntitlementCard key={i} e={e} theme={theme} />
-            ))}
+            {/* The verdict, set as the page's headline — then a rule, then the evidence. */}
+            <ThemedText type="display">{res.headline}</ThemedText>
+            <View style={[styles.rule, { backgroundColor: theme.line }]} />
+            {res.entitlements.length ? (
+              <View style={[styles.sheet, styles.sheetTop, { backgroundColor: theme.card, borderColor: theme.line }]}>
+                {res.entitlements.map((e, i) => (
+                  <EntitlementCard key={i} e={e} theme={theme} first={i === 0} />
+                ))}
+              </View>
+            ) : null}
 
-            <Doc title="✉️ Your demand letter" body={res.letterBody} theme={theme} onCopy={() => Clipboard.setStringAsync(letterFilled())} hint="Fill the [BRACKETS] below, then send." />
-            <Doc title="🏛️ DOT complaint text" body={res.dotText} theme={theme} onCopy={() => Clipboard.setStringAsync(dotFilled())} />
+            <Doc title="Your demand letter" body={res.letterBody} theme={theme} onCopy={() => Clipboard.setStringAsync(letterFilled())} hint="Fill the [BRACKETS] below, then send." />
+            <Doc title="DOT complaint text" body={res.dotText} theme={theme} onCopy={() => Clipboard.setStringAsync(dotFilled())} />
 
             {/* FILE IT */}
-            <ThemedView type="backgroundElement" style={[styles.panel, { borderColor: theme.brand }]}>
-              <ThemedText style={styles.panelTitle} themeColor="brandDeep">📨 File your claim</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>
+            <ThemedView type="card" style={[styles.panel, { borderColor: theme.line }]}>
+              <ThemedText type="section">File your claim</ThemedText>
+              <View style={[styles.panelRule, { backgroundColor: theme.line }]} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.panelBlurb}>
                 Pick your airline and enter your details once — they fill in on every letter and form below. You review and send each one yourself.
               </ThemedText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRail}>
                 {AIRLINES.map((x, i) => {
                   const on = airlineIdx === i;
                   return (
-                    <Pressable key={x.iata} onPress={() => { setAirlineIdx(i); setField('airline', shortName(x.name)); }} style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-                      <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>{shortName(x.name)}</ThemedText>
+                    <Pressable key={x.iata} accessibilityRole="button" hitSlop={{ top: 5, bottom: 5 }} onPress={() => { setAirlineIdx(i); setField('airline', shortName(x.name)); }} style={({ pressed }) => [styles.chip, { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' }, pressed && styles.pressed]}>
+                      <ThemedText type="small" style={{ fontWeight: on ? '700' : '500', color: on ? theme.brandDeep : theme.textSecondary }}>{shortName(x.name)}</ThemedText>
                     </Pressable>
                   );
                 })}
@@ -270,11 +277,11 @@ export default function OwedScreen() {
                 <Field label="Your email/phone" value={details.email} onChange={(v) => setField('email', v)} theme={theme} />
               </View>
               <View style={styles.actions}>
-                <ActionBtn label="📧 Email the airline" theme={theme} onPress={doEmail} />
-                <ActionBtn label="🏛️ DOT complaint" theme={theme} onPress={doDot} />
-                <ActionBtn label="🖨️ Print / PDF" theme={theme} onPress={() => { tracker.track('airline').catch(() => {}); doPrint(letterFilled(), 'Demand letter'); }} />
+                <ActionBtn label="Email the airline" theme={theme} onPress={doEmail} primary />
+                <ActionBtn label="DOT complaint" theme={theme} onPress={doDot} />
+                <ActionBtn label="Print / PDF" theme={theme} onPress={() => { tracker.track('airline').catch(() => {}); doPrint(letterFilled(), 'Demand letter'); }} />
                 {filed.payment === 'credit' ? (
-                  <ActionBtn label="💳 Chargeback letter" theme={theme} onPress={() => { tracker.track('chargeback').catch(() => {}); doPrint(fill(chargebackLetter(answers, details), details, answers), 'Chargeback letter'); }} />
+                  <ActionBtn label="Chargeback letter" theme={theme} onPress={() => { tracker.track('chargeback').catch(() => {}); doPrint(fill(chargebackLetter(answers, details), details, answers), 'Chargeback letter'); }} />
                 ) : null}
               </View>
             </ThemedView>
@@ -297,37 +304,43 @@ export default function OwedScreen() {
 
             {/* GO VIRAL */}
             {shareCopy ? (
-            <ThemedView type="backgroundElement" style={[styles.panel, { borderColor: theme.line }]}>
-              <ThemedText style={styles.panelTitle} themeColor="brandDeep">📱 Share your receipt</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.three }}>
+            <ThemedView type="card" style={[styles.panel, { borderColor: theme.line }]}>
+              <ThemedText type="section">Share your receipt</ThemedText>
+              <View style={[styles.panelRule, { backgroundColor: theme.line }]} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.panelBlurb}>
                 A clear amount plus the rule behind it is what gets shared. Post the receipt so others know to check too.
               </ThemedText>
-              <View style={{ alignItems: 'center' }}>
+              <View style={styles.cardStage}>
                 <ReceiptCard copy={shareCopy} />
               </View>
-              <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.three }}>Caption</ThemedText>
-              <Text selectable style={[styles.caption, { color: theme.text, backgroundColor: theme.card, borderColor: theme.line }]}>
+              <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.captionLabel}>Caption</ThemedText>
+              <Text selectable style={[styles.captionBox, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
                 {caption(res, answers, details, variant)}
               </Text>
               <View style={styles.actions}>
-                <ActionBtn label="🎲 Remix caption" theme={theme} onPress={() => setVariant((v) => v + 1)} />
-                <ActionBtn label="📋 Copy caption" theme={theme} onPress={() => Clipboard.setStringAsync(caption(res, answers, details, variant))} />
-                <ActionBtn label="📲 Share to TikTok" theme={theme} onPress={doShareCard} />
+                <ActionBtn label="Remix caption" theme={theme} onPress={() => setVariant((v) => v + 1)} />
+                <ActionBtn label="Copy caption" theme={theme} onPress={() => Clipboard.setStringAsync(caption(res, answers, details, variant))} />
+                <ActionBtn label="Share to TikTok" theme={theme} onPress={doShareCard} primary />
               </View>
-              <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.panelFoot}>
                 Tap Share → pick TikTok (Photo mode); your caption is copied to paste. Auto-posting needs a free TikTok developer app — get one and it becomes one tap.
               </ThemedText>
             </ThemedView>
             ) : null}
 
-            {status ? <ThemedText type="small" style={{ color: theme.good, fontWeight: '600', marginTop: Spacing.two }}>{status}</ThemedText> : null}
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.three, fontStyle: 'italic' }}>⚖️ {res.disclaimer}</ThemedText>
+            {status ? (
+              <View style={[styles.status, { backgroundColor: theme.backgroundElement, borderColor: theme.line, borderLeftColor: theme.good }]}>
+                <ThemedText type="small">{status}</ThemedText>
+              </View>
+            ) : null}
+            <View style={[styles.rule, styles.footRule, { backgroundColor: theme.line }]} />
+            <ThemedText type="small" themeColor="textSecondary" style={styles.disclaimer}>{res.disclaimer}</ThemedText>
             {history.length ? (
-              <Pressable onPress={back} accessibilityRole="button" style={({ pressed }) => [styles.cta, { borderWidth: 1.5, borderColor: theme.line, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
-                <ThemedText style={{ fontWeight: '700' }}>← Change an answer</ThemedText>
+              <Pressable onPress={back} accessibilityRole="button" style={({ pressed }) => [styles.cta, styles.ctaGhost, { borderColor: theme.line }, pressed && styles.pressed]}>
+                <ThemedText type="smallBold" style={{ color: theme.brand }}>← Change an answer</ThemedText>
               </Pressable>
             ) : null}
-            <Pressable onPress={restart} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
+            <Pressable onPress={restart} accessibilityRole="button" style={({ pressed }) => [styles.cta, { backgroundColor: theme.brandDeep }, pressed && styles.pressed]}>
               <ThemedText style={styles.ctaText}>↺ Check another problem</ThemedText>
             </Pressable>
           </>
@@ -348,70 +361,88 @@ function QuestionView({ q, count, onAnswer, onBack, theme }: { q: Question; coun
   const input = [styles.input, { backgroundColor: theme.card, borderColor: theme.line, color: theme.text }];
   return (
     <View>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.qstep}>Question {count + 1}</ThemedText>
-      <ThemedText style={styles.qtitle}>{q.title}</ThemedText>
-      {q.help ? <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>{q.help}</ThemedText> : null}
+      <ThemedText type="eyebrow" themeColor="textSecondary">Question {count + 1}</ThemedText>
+      <ThemedText type="display" style={styles.qtitle}>{q.title}</ThemedText>
+      <View style={[styles.rule, { backgroundColor: theme.line }]} />
+      {q.help ? <ThemedText type="small" themeColor="textSecondary" style={styles.qhelp}>{q.help}</ThemedText> : null}
       {q.kind === 'choice' ? (
-        <View style={{ gap: 9, marginTop: Spacing.two }}>
-          {(q.options || []).map((o) => (
-            <Pressable key={o.value} onPress={() => onAnswer(q.id, o.value)} style={({ pressed }) => [styles.opt, { backgroundColor: theme.card, borderColor: theme.line }, pressed && { opacity: 0.7 }]}>
-              <ThemedText style={{ fontWeight: '600' }}>{o.label}</ThemedText>
+        // One ruled sheet of answers, not a stack of floating buttons.
+        <View style={[styles.sheet, styles.sheetTop, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          {(q.options || []).map((o, i) => (
+            <Pressable key={o.value} accessibilityRole="button" onPress={() => onAnswer(q.id, o.value)} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+              <View style={[styles.opt, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+                <ThemedText style={styles.optLabel}>{o.label}</ThemedText>
+                <ThemedText style={[styles.arrow, { color: theme.textSecondary }]}>→</ThemedText>
+              </View>
             </Pressable>
           ))}
         </View>
       ) : null}
       {q.kind === 'money' ? (
-        <View style={{ marginTop: Spacing.two }}>
+        <View style={styles.fieldBlock}>
           <View style={styles.moneyRow}>
-            <ThemedText style={styles.cur}>$</ThemedText>
-            <TextInput value={val} onChangeText={setVal} keyboardType="numeric" placeholder="e.g. 250" placeholderTextColor={theme.textSecondary} style={[...input, { flex: 1 }]} />
+            <ThemedText type="money" style={[styles.cur, { color: theme.textSecondary }]}>$</ThemedText>
+            <TextInput value={val} onChangeText={setVal} keyboardType="numeric" placeholder="e.g. 250" placeholderTextColor={theme.textSecondary} style={[...input, styles.grow]} />
           </View>
-          <Pressable onPress={() => onAnswer(q.id, Number(val) || 0)} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
+          <Pressable accessibilityRole="button" onPress={() => onAnswer(q.id, Number(val) || 0)} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brandDeep }, pressed && styles.pressed]}>
             <ThemedText style={styles.ctaText}>Continue →</ThemedText>
           </Pressable>
         </View>
       ) : null}
       {q.kind === 'date' ? (
-        <View style={{ marginTop: Spacing.two }}>
+        <View style={styles.fieldBlock}>
           <TextInput value={val} onChangeText={setVal} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textSecondary} autoCapitalize="none" autoCorrect={false} style={input} />
-          <Pressable onPress={() => onAnswer(q.id, val)} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand, marginTop: Spacing.three }, pressed && { opacity: 0.7 }]}>
+          <Pressable accessibilityRole="button" onPress={() => onAnswer(q.id, val)} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brandDeep }, pressed && styles.pressed]}>
             <ThemedText style={styles.ctaText}>Continue →</ThemedText>
           </Pressable>
         </View>
       ) : null}
       {count ? (
-        <Pressable onPress={onBack} style={{ marginTop: Spacing.four }}>
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>← Back</ThemedText>
+        <Pressable accessibilityRole="button" hitSlop={12} onPress={onBack} style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}>
+          <ThemedText type="smallBold" style={{ color: theme.brand }}>← Back</ThemedText>
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-function EntitlementCard({ e, theme }: { e: Entitlement; theme: ReturnType<typeof useTheme> }) {
+// A row in the entitlements sheet. The thin left rule carries the strength; the money is tabular.
+function EntitlementCard({ e, theme, first }: { e: Entitlement; theme: ReturnType<typeof useTheme>; first?: boolean }) {
   const edge = e.strength === 'strong' ? theme.good : e.strength === 'conditional' ? theme.warn : e.strength === 'action' ? theme.brand : theme.textSecondary;
   const showAmt = e.amountText && e.amountText !== '—' && e.amountText !== '';
+  const meta = (e.rule && e.rule !== '—') || e.deadline;
   return (
-    <ThemedView type="card" style={[styles.eCard, { borderColor: theme.line, borderLeftColor: edge }]}>
-      <ThemedText style={{ fontWeight: '800', fontSize: 15.5 }}>{e.title}</ThemedText>
-      {showAmt ? <ThemedText style={{ fontWeight: '800', color: e.strength === 'strong' ? theme.good : theme.text, marginTop: 2 }}>{e.amountText}</ThemedText> : null}
-      <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4, lineHeight: 20 }}>{e.detail}</ThemedText>
-      {e.condition ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4, lineHeight: 20, fontWeight: '700' }}>Only if: {e.condition}</ThemedText> : null}
-      {e.rule && e.rule !== '—' ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>📜 {e.rule}</ThemedText> : null}
-      {e.deadline ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 2 }}>⏰ {e.deadline}</ThemedText> : null}
-    </ThemedView>
+    <View style={[styles.eRow, { borderLeftColor: edge }, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+      <ThemedText style={styles.eTitle}>{e.title}</ThemedText>
+      {showAmt ? <ThemedText type="money" style={[styles.eAmount, { color: e.strength === 'strong' ? theme.good : theme.text }]}>{e.amountText}</ThemedText> : null}
+      <ThemedText type="small" themeColor="textSecondary" style={styles.eDetail}>{e.detail}</ThemedText>
+      {e.condition ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.eDetail}>
+          <ThemedText type="smallBold">Only if: </ThemedText>{e.condition}
+        </ThemedText>
+      ) : null}
+      {meta ? (
+        <View style={[styles.eMeta, { borderTopColor: theme.line }]}>
+          {e.rule && e.rule !== '—' ? <ThemedText type="small" themeColor="textSecondary">{e.rule}</ThemedText> : null}
+          {e.deadline ? <ThemedText type="small" themeColor="textSecondary" style={styles.eDeadline}>{e.deadline}</ThemedText> : null}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 function Doc({ title, body, theme, onCopy, hint }: { title: string; body: string; theme: ReturnType<typeof useTheme>; onCopy: () => void; hint?: string }) {
   return (
-    <View style={{ marginTop: Spacing.three }}>
+    <View style={styles.docBlock}>
       <View style={styles.docHead}>
-        <ThemedText style={{ fontWeight: '800' }}>{title}</ThemedText>
-        <Pressable onPress={onCopy} hitSlop={8}><ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>Copy</ThemedText></Pressable>
+        <ThemedText type="section" style={styles.grow}>{title}</ThemedText>
+        <Pressable accessibilityRole="button" onPress={onCopy} hitSlop={12} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+          <ThemedText type="smallBold" style={{ color: theme.brand }}>Copy</ThemedText>
+        </Pressable>
       </View>
-      {hint ? <ThemedText type="small" themeColor="textSecondary">{hint}</ThemedText> : null}
-      <Text selectable style={[styles.caption, { color: theme.text, backgroundColor: theme.card, borderColor: theme.line }]}>{body}</Text>
+      <View style={[styles.rule, styles.docRule, { backgroundColor: theme.line }]} />
+      {hint ? <ThemedText type="small" themeColor="textSecondary" style={styles.docHint}>{hint}</ThemedText> : null}
+      <Text selectable style={[styles.docBody, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>{body}</Text>
     </View>
   );
 }
@@ -419,36 +450,54 @@ function Doc({ title, body, theme, onCopy, hint }: { title: string; body: string
 function Field({ label, value, onChange, theme, placeholder }: { label: string; value?: string; onChange: (v: string) => void; theme: ReturnType<typeof useTheme>; placeholder?: string }) {
   return (
     <View style={styles.field}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '700', fontSize: 12 }}>{label}</ThemedText>
-      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.textSecondary} autoCapitalize="characters" autoCorrect={false} style={[styles.input, { backgroundColor: theme.card, borderColor: theme.line, color: theme.text }]} />
+      <ThemedText type="eyebrow" themeColor="textSecondary">{label}</ThemedText>
+      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.textSecondary} autoCapitalize="characters" autoCorrect={false} style={[styles.input, { backgroundColor: theme.backgroundElement, borderColor: theme.line, color: theme.text }]} />
     </View>
   );
 }
 
-function ActionBtn({ label, theme, onPress }: { label: string; theme: ReturnType<typeof useTheme>; onPress: () => void }) {
+function ActionBtn({ label, theme, onPress, primary }: { label: string; theme: ReturnType<typeof useTheme>; onPress: () => void; primary?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.action, { borderColor: theme.brand, backgroundColor: theme.card }, pressed && { opacity: 0.7 }]}>
-      <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{label}</ThemedText>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.action, primary ? { backgroundColor: theme.brandDeep, borderColor: theme.brandDeep } : { borderColor: theme.line }, pressed && styles.pressed]}>
+      <ThemedText type="smallBold" style={{ color: primary ? '#fdfbf5' : theme.brand }}>{label}</ThemedText>
     </Pressable>
   );
 }
 
+/** The share card: a paper receipt, set in the same type as the app and the web card. The figure is
+ *  the point, so it is set large in the serif and nothing shouts around it. */
 function ReceiptCard({ refProp, copy }: { refProp?: React.RefObject<View | null>; copy: ShareCopy }) {
   return (
     <View ref={refProp} collapsable={false} style={card.wrap}>
-      <View style={card.accent} />
-      <Text style={card.kicker}>Most travelers never claim this</Text>
-      <Text style={card.headline}>{copy.headline}</Text>
-      <Text style={card.sub}>{copy.sub}</Text>
-      <View style={card.receipt}>
-        <Text style={card.rlabel}>{copy.panelLabel}</Text>
-        <Text style={card.ramt}>{copy.big}</Text>
-        <Text style={card.rlabel}>The rule</Text>
-        <Text style={card.rrule}>{copy.rule}</Text>
+      <View style={card.spine} />
+      <View style={card.body}>
+        <View style={card.masthead}>
+          <View style={card.monogram}><Text style={card.monogramLetter}>F</Text></View>
+          <Text style={card.wordmark}>Fairfare</Text>
+        </View>
+        <View style={card.rule} />
+        <Text style={card.kicker}>WHAT MOST FLYERS NEVER CLAIM</Text>
+        <Text style={card.headline}>{copy.headline}</Text>
+        <Text style={card.sub} numberOfLines={3}>{copy.sub}</Text>
+        <Perforation />
+        <Text style={card.label}>{copy.panelLabel.toUpperCase()}</Text>
+        <Text style={card.big} numberOfLines={2}>{copy.big}</Text>
+        <Text style={[card.label, { marginTop: 14 }]}>THE RULE</Text>
+        <Text style={card.ruleText} numberOfLines={2}>{copy.rule}</Text>
+        <Perforation />
+        <Text style={card.cta}>What does your airline owe you?</Text>
+        <Text style={card.ctaAccent}>Check yours free  →</Text>
+        <Text style={card.brand}>Fairfare · know your rights, get paid</Text>
       </View>
-      <Text style={card.cta}>What does your airline owe you?</Text>
-      <Text style={card.ctaOrange}>Find out free ↓</Text>
-      <Text style={card.brand}>Fairfare · know your rights, get paid</Text>
+    </View>
+  );
+}
+
+/** A torn-off edge, drawn as dashes: RN's dashed borders don't render reliably on Android. */
+function Perforation() {
+  return (
+    <View style={card.perf}>
+      {Array.from({ length: 26 }).map((_, i) => <View key={i} style={card.perfDash} />)}
     </View>
   );
 }
@@ -456,38 +505,84 @@ function ReceiptCard({ refProp, copy }: { refProp?: React.RefObject<View | null>
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth },
-  qstep: { fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
-  qtitle: { fontSize: 22, fontWeight: '800', marginTop: 4, marginBottom: 2 },
-  opt: { borderWidth: 1.5, borderRadius: Spacing.three, padding: Spacing.three },
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  footRule: { marginTop: Spacing.four },
+  pressed: { opacity: 0.75 },
+  grow: { flex: 1 },
+
+  // ---- the wizard ----
+  qtitle: { marginTop: Spacing.two },
+  qhelp: { marginTop: Spacing.three },
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+  sheetTop: { marginTop: Spacing.four },
+  opt: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 52, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  optLabel: { flex: 1, fontWeight: '600' },
+  arrow: { fontSize: 17 },
+  fieldBlock: { marginTop: Spacing.four },
   moneyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  cur: { fontSize: 22, fontWeight: '800' },
-  input: { borderWidth: 1.5, borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, fontSize: 16 },
-  cta: { borderRadius: Spacing.three, paddingVertical: Spacing.three, alignItems: 'center' },
-  ctaText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  headline: { fontSize: 21, fontWeight: '800', marginBottom: Spacing.three, lineHeight: 28 },
-  eCard: { borderWidth: 1, borderLeftWidth: 5, borderRadius: Spacing.three, padding: Spacing.three, marginBottom: Spacing.two },
-  docHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  caption: { borderWidth: 1, borderRadius: Spacing.two, padding: Spacing.three, marginTop: Spacing.one, fontSize: 14, lineHeight: 21 },
-  panel: { borderWidth: 1.5, borderRadius: Spacing.three, padding: Spacing.three, marginTop: Spacing.four },
-  panelTitle: { fontSize: 17, fontWeight: '800', marginBottom: 4 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  cur: { marginTop: 1 },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two + 2, paddingVertical: Spacing.two, minHeight: 44, fontSize: 15.5 },
+  backLink: { marginTop: Spacing.four, alignSelf: 'flex-start', paddingVertical: Spacing.two },
+
+  // ---- buttons ----
+  cta: { borderRadius: Radius.sm, minHeight: 48, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.three },
+  ctaGhost: { borderWidth: StyleSheet.hairlineWidth },
+  ctaText: { color: '#fdfbf5', fontWeight: '700', fontSize: 15.5 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.four },
+  action: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, minHeight: 44, paddingHorizontal: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+
+  // ---- entitlement rows ----
+  eRow: { borderLeftWidth: 3, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  eTitle: { fontFamily: Fonts.serif, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  eAmount: { marginTop: Spacing.half },
+  eDetail: { marginTop: Spacing.one + 1 },
+  eMeta: { marginTop: Spacing.two, paddingTop: Spacing.two, borderTopWidth: StyleSheet.hairlineWidth },
+  eDeadline: { marginTop: Spacing.half },
+
+  // ---- documents ----
+  docBlock: { marginTop: Spacing.four },
+  docHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  docRule: { marginTop: Spacing.two },
+  docHint: { marginTop: Spacing.two },
+  docBody: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.two, fontFamily: Fonts.serif, fontSize: 14.5, lineHeight: 23 },
+
+  // ---- panels ----
+  panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, padding: Spacing.three, marginTop: Spacing.four },
+  panelRule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.two, marginHorizontal: -Spacing.three },
+  panelBlurb: { marginTop: Spacing.three },
+  panelFoot: { marginTop: Spacing.three },
+  chipScroll: { marginTop: Spacing.three, marginHorizontal: -Spacing.three },
+  chipRail: { gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.half },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, minHeight: 38, paddingHorizontal: Spacing.two + 2, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.three },
-  field: { width: '47%', flexGrow: 1, gap: 4 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.three },
-  action: { borderWidth: 1.5, borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  field: { width: '47%', flexGrow: 1, gap: Spacing.one + 1 },
+  cardStage: { alignItems: 'center', marginTop: Spacing.four },
+  captionLabel: { marginTop: Spacing.four },
+  captionBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.two, fontSize: 14, lineHeight: 21 },
+
+  // ---- status ----
+  status: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.four },
+  disclaimer: { marginTop: Spacing.three, fontStyle: 'italic' },
 });
 
 const card = StyleSheet.create({
-  wrap: { width: 300, backgroundColor: '#0e1c33', borderRadius: 22, padding: 24, paddingTop: 20 },
-  accent: { width: 70, height: 8, borderRadius: 4, backgroundColor: '#1565c0', marginBottom: 16 },
-  kicker: { color: '#f3a93c', fontWeight: '800', fontSize: 13 },
-  headline: { color: '#ffffff', fontWeight: '900', fontSize: 30, marginTop: 10, lineHeight: 34 },
-  sub: { color: '#9db4d6', fontWeight: '600', fontSize: 15, marginTop: 12 },
-  receipt: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 18, padding: 18, marginTop: 18 },
-  rlabel: { color: '#7fa9e0', fontWeight: '800', fontSize: 13 },
-  ramt: { color: '#2bcf86', fontWeight: '900', fontSize: 44, marginVertical: 4 },
-  rrule: { color: '#ffffff', fontWeight: '700', fontSize: 18, marginTop: 4 },
-  cta: { color: '#ffffff', fontWeight: '900', fontSize: 20, marginTop: 22, lineHeight: 25 },
-  ctaOrange: { color: '#f3a93c', fontWeight: '900', fontSize: 18, marginTop: 8 },
-  brand: { color: '#9db4d6', fontWeight: '700', fontSize: 13, marginTop: 12 },
+  wrap: { width: 320, flexDirection: 'row', backgroundColor: '#f7f4ee', borderWidth: StyleSheet.hairlineWidth, borderColor: '#ddd6c8' },
+  spine: { width: 5, backgroundColor: '#16324a' },
+  body: { flex: 1, paddingHorizontal: 22, paddingTop: 20, paddingBottom: 22 },
+  masthead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  monogram: { width: 30, height: 30, borderRadius: 3, backgroundColor: '#16324a', alignItems: 'center', justifyContent: 'center' },
+  monogramLetter: { fontFamily: Fonts.serif, fontStyle: 'italic', fontWeight: '700', fontSize: 17, lineHeight: 21, color: '#fdfbf5' },
+  wordmark: { fontFamily: Fonts.serif, fontWeight: '700', fontSize: 21, color: '#1c2733' },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: '#cfc7b6', marginTop: 14 },
+  kicker: { color: '#b03a2e', fontWeight: '700', fontSize: 10.5, letterSpacing: 1.1, marginTop: 16 },
+  headline: { fontFamily: Fonts.serif, color: '#1c2733', fontWeight: '700', fontSize: 26, lineHeight: 31, marginTop: 10 },
+  sub: { color: '#5c6670', fontSize: 12.5, lineHeight: 18, marginTop: 10 },
+  perf: { flexDirection: 'row', overflow: 'hidden', marginTop: 18, marginBottom: 2 },
+  perfDash: { width: 6, height: 1, backgroundColor: '#cfc7b6', marginRight: 5 },
+  label: { color: '#5c6670', fontWeight: '700', fontSize: 10, letterSpacing: 1.1, marginTop: 14 },
+  big: { fontFamily: Fonts.serif, color: '#1c2733', fontWeight: '700', fontSize: 38, lineHeight: 44, marginTop: 4 },
+  ruleText: { fontFamily: Fonts.serif, color: '#1c2733', fontSize: 15, lineHeight: 20, marginTop: 3 },
+  cta: { fontFamily: Fonts.serif, color: '#1c2733', fontWeight: '700', fontSize: 17, lineHeight: 22, marginTop: 18 },
+  ctaAccent: { color: '#b03a2e', fontWeight: '700', fontSize: 12.5, marginTop: 6 },
+  brand: { color: '#5c6670', fontWeight: '600', fontSize: 11, marginTop: 10 },
 });

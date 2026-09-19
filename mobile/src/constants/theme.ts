@@ -1,6 +1,17 @@
 /**
- * App color palette (light + dark). Extends the Expo template's minimal palette with the
- * warm, friendly brand colors and the status colors used by the "Your Rights" guide.
+ * The app's visual language — the same editorial system as the web app (public/styles.css, the
+ * REDESIGN LAYER at the end of that file). Keep the two in step; they are one product.
+ *
+ * The rules, in short:
+ *   · Warm paper, not white. Ink, not black. One accent (deep navy), one alarm (oxblood).
+ *   · Serif for display and section titles; the system sans for everything you read in bulk.
+ *   · Flat surfaces: hairline rules and 1px borders, radius 3–8, NO shadows, NO gradients, no pills.
+ *   · Money is set in tabular figures so columns line up.
+ *   · No decorative emoji anywhere in the chrome. Functional glyphs only (✓ ✕ → ← ↗ ↺).
+ * Things to never reintroduce: emoji-prefixed headings and buttons, gradient buttons, pill-shaped
+ * everything, a centred hero with a giant rounded app-icon tile, shadow-blob cards, rainbow status
+ * colours. Those are the marks of a template, and they read as one.
+ *
  * The template components (ThemedText/ThemedView/native tabs) rely on the base keys:
  * text, background, backgroundElement, backgroundSelected, textSecondary — keep those.
  */
@@ -11,38 +22,38 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#213040',
-    background: '#f5f1ea', // warm cream
-    backgroundElement: '#eef2f8', // chips / subtle surfaces
-    backgroundSelected: '#dde7f6',
-    textSecondary: '#4f6070', // darkened to clear WCAG 4.5:1 on cream/white (carries most body copy)
-    card: '#ffffff',
-    line: '#e3e8f0',
-    brand: '#1565c0',
-    brandDeep: '#0d3a6b',
-    good: '#1a9d68',
-    goodBg: '#e6f6ee',
-    warn: '#b9760e',
-    warnBg: '#fbf0d8',
-    bad: '#d2564f',
-    badBg: '#fbe9e8',
+    text: '#1c2733', // ink
+    background: '#f7f4ee', // warm paper
+    backgroundElement: '#f1ede4', // recessed panel
+    backgroundSelected: '#e7e0d2', // chosen chip / active row
+    textSecondary: '#5c6670',
+    card: '#fffdf9',
+    line: '#ddd6c8', // hairline
+    brand: '#0f4c81', // links, quiet emphasis
+    brandDeep: '#16324a', // solid buttons, the monogram
+    good: '#1c7a4b',
+    goodBg: '#e9f1e9',
+    warn: '#9a6b14',
+    warnBg: '#f5eeda',
+    bad: '#b03a2e', // oxblood: the one alarm colour
+    badBg: '#f6e8e5',
   },
   dark: {
-    text: '#eef2f9',
-    background: '#0d1320',
-    backgroundElement: '#1a2336',
-    backgroundSelected: '#27324c',
-    textSecondary: '#93a2bd',
-    card: '#161f31',
-    line: '#2c3a55',
-    brand: '#7cb6ff',
-    brandDeep: '#aacdfd',
-    good: '#2bcf86',
-    goodBg: 'rgba(43,207,134,0.14)',
-    warn: '#f0a830',
-    warnBg: 'rgba(240,168,48,0.14)',
-    bad: '#ef5b6a',
-    badBg: 'rgba(239,91,106,0.14)',
+    text: '#e8e2d6',
+    background: '#14191f',
+    backgroundElement: '#232b34',
+    backgroundSelected: '#2b343d',
+    textSecondary: '#98a1a9',
+    card: '#1b222a',
+    line: '#333d47',
+    brand: '#7fb0d8',
+    brandDeep: '#b8d3e8',
+    good: '#5db98a',
+    goodBg: 'rgba(93,185,138,0.12)',
+    warn: '#d4a94e',
+    warnBg: 'rgba(212,169,78,0.12)',
+    bad: '#d97b6c',
+    badBg: 'rgba(217,123,108,0.12)',
   },
 } as const;
 
@@ -51,7 +62,7 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 export const Fonts = Platform.select({
   ios: {
     sans: 'system-ui',
-    serif: 'ui-serif',
+    serif: 'Georgia',
     rounded: 'ui-rounded',
     mono: 'ui-monospace',
   },
@@ -78,6 +89,9 @@ export const Spacing = {
   five: 32,
   six: 64,
 } as const;
+
+/** Radii stay small: a document, not a bubble. */
+export const Radius = { sm: 3, md: 6, lg: 8 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 // On web the brand/tab bar floats at the TOP (see app-tabs.web.tsx), so screens reserve top space there.

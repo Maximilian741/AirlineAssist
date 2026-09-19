@@ -5,8 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { fetchWatches } from '@/lib/alerts';
 import { deadlines, type Trip } from '@/lib/trips';
@@ -42,84 +41,93 @@ export default function HomeScreen() {
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + TopTabInset + Spacing.five, paddingBottom: insets.bottom + BottomTabInset + Spacing.four },
+        { paddingTop: insets.top + TopTabInset + Spacing.four, paddingBottom: insets.bottom + BottomTabInset + Spacing.four },
       ]}>
       <View style={styles.inner}>
-        <View style={[styles.mark, { backgroundColor: theme.brand }]}>
-          <ThemedText style={styles.markText}>✈</ThemedText>
+        {/* Masthead: the monogram and wordmark of the web app, set in the same serif. */}
+        <View style={styles.masthead}>
+          <View style={[styles.monogram, { backgroundColor: theme.brandDeep }]}>
+            <ThemedText style={styles.monogramLetter}>F</ThemedText>
+          </View>
+          <ThemedText type="display">Fairfare</ThemedText>
         </View>
-        <ThemedText style={styles.brandTitle}>Fairfare</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.tagline}>
+        <View style={[styles.rule, { backgroundColor: theme.line }]} />
+        <ThemedText type="lede" themeColor="textSecondary" style={styles.tagline}>
           Cheap companion fares out of Helena — and the receipts to claim what you’re owed when a flight goes wrong.
         </ThemedText>
 
+        {/* The visual block lives INSIDE the pressable: an anchor wrapper (expo-router Link on web)
+            doesn't inherit a Pressable's layout, and a row that collapses to a column looks broken. */}
         <Link href="/crisis" asChild>
-          <Pressable style={({ pressed }) => [styles.crisisCard, { backgroundColor: theme.badBg, borderColor: theme.bad }, pressed && styles.pressed]}>
-            <ThemedText style={{ fontWeight: '800', fontSize: 15 }}>
-              At the airport with a problem <ThemedText style={{ color: theme.bad, fontWeight: '800', fontSize: 15 }}>right now</ThemedText>? Tap here.
-            </ThemedText>
+          <Pressable style={({ pressed }) => (pressed ? styles.pressed : null)}>
+            <View style={[styles.crisis, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.bad }]}>
+              <ThemedText type="eyebrow" style={{ color: theme.bad }}>At the airport right now</ThemedText>
+              <ThemedText type="smallBold" style={styles.crisisLine}>
+                Delayed, bumped, canceled, or a bag that didn’t come? Start here. <ThemedText type="smallBold" style={{ color: theme.bad }}>→</ThemedText>
+              </ThemedText>
+            </View>
           </Pressable>
         </Link>
-        <NavCard
-          href="/owed"
-          emoji="💸"
-          title="What am I owed?"
-          blurb="Flight go wrong? Get the exact amount the airline owes you, the law behind it, and a ready-to-send demand you can file in a couple of taps."
-        />
-        <NavCard
-          href="/trips"
-          emoji="🧳"
-          title="My trips & deadlines"
-          blurb={needs ? `${needs} thing${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you: a new watchdog alert or a deadline closing within 3 days.` : 'Claims expire — that’s how airlines keep the money. Save a trip and every deadline counts down for you.'}
-          badge={needs || undefined}
-        />
-        <NavCard
-          href="/moves"
-          emoji="💰"
-          title="Money moves"
-          blurb="The tactics airlines don’t advertise — pay less, claw money back. With a true-price calculator and the fees they bury."
-        />
-        <NavCard
-          href="/rights"
-          emoji="🛡️"
-          title="Know your rights"
-          blurb="Refunds, bumping cash, delay rules, and how to actually get paid. Verified, source-linked — works offline."
-        />
-        <NavCard
-          href="/search"
-          emoji="🔎"
-          title="Find companion deals"
-          blurb="Where your Delta companion certificate saves the most flying out of Helena."
-        />
 
-        <ThemedView type="backgroundElement" style={[styles.mission, { borderColor: theme.line }]}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Built to help travelers — not to milk them. No ads, no selling your data, no airline kickbacks.
-          </ThemedText>
-        </ThemedView>
+        {/* An index, not a stack of floating cards: one sheet, hairline-ruled. */}
+        <View style={[styles.index, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <IndexRow
+            href="/owed"
+            first
+            title="What am I owed?"
+            blurb="The exact amount, the rule behind it, and a demand letter ready to send."
+          />
+          <IndexRow
+            href="/trips"
+            title="My trips & deadlines"
+            blurb={needs ? `${needs} thing${needs === 1 ? '' : 's'} need${needs === 1 ? 's' : ''} you — a watchdog alert or a claim window closing.` : 'Claims expire. Save a trip and every deadline counts down for you.'}
+            badge={needs || undefined}
+          />
+          <IndexRow
+            href="/moves"
+            title="Money moves"
+            blurb="What a fare really costs, the fees they bury, and how to pay less."
+          />
+          <IndexRow
+            href="/rights"
+            title="Know your rights"
+            blurb="Refunds, bumping cash, delay rules — source-linked, and it works offline."
+          />
+          <IndexRow
+            href="/search"
+            title="Find companion deals"
+            blurb="Where your Delta companion certificate saves the most out of Helena."
+          />
+        </View>
+
+        <View style={[styles.rule, styles.footRule, { backgroundColor: theme.line }]} />
+        <ThemedText type="small" themeColor="textSecondary" style={styles.mission}>
+          Built for travelers, not off them: no ads, no selling your data, no airline kickbacks.
+        </ThemedText>
       </View>
     </ScrollView>
   );
 }
 
-function NavCard({ href, emoji, title, blurb, badge }: { href: Href; emoji: string; title: string; blurb: string; badge?: number }) {
+function IndexRow({ href, title, blurb, badge, first }: { href: Href; title: string; blurb: string; badge?: number; first?: boolean }) {
   const theme = useTheme();
   return (
     <Link href={href} asChild>
-      <Pressable
-        style={({ pressed }) => [
-          styles.navCard,
-          { backgroundColor: theme.card, borderColor: theme.line },
-          pressed && styles.pressed,
-        ]}>
-        <ThemedText style={styles.navEmoji}>{emoji}</ThemedText>
-        <View style={styles.navTextWrap}>
-          <ThemedText style={styles.navTitle}>{title}{badge ? <ThemedText style={{ color: theme.bad, fontWeight: '800' }}>  {badge}</ThemedText> : null}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.navBlurb}>
-            {blurb}
-          </ThemedText>
+      <Pressable style={({ pressed }) => (pressed ? styles.pressed : null)}>
+        <View style={[styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+          <View style={styles.rowText}>
+            <View style={styles.rowTitleLine}>
+              <ThemedText style={styles.rowTitle}>{title}</ThemedText>
+              {badge ? (
+                <View style={[styles.badge, { backgroundColor: theme.badBg, borderColor: theme.bad }]}>
+                  <ThemedText style={[styles.badgeText, { color: theme.bad }]}>{badge}</ThemedText>
+                </View>
+              ) : null}
+            </View>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.rowBlurb}>{blurb}</ThemedText>
+          </View>
+          <ThemedText style={[styles.arrow, { color: theme.textSecondary }]}>→</ThemedText>
         </View>
-        <ThemedText style={[styles.chevron, { color: theme.brand }]}>›</ThemedText>
       </Pressable>
     </Link>
   );
@@ -127,25 +135,24 @@ function NavCard({ href, emoji, title, blurb, badge }: { href: Href; emoji: stri
 
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
-  inner: { width: '100%', maxWidth: MaxContentWidth, alignItems: 'stretch', gap: Spacing.two },
-  mark: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  markText: { fontSize: 32, color: '#ffffff' },
-  brandTitle: { fontSize: 30, fontWeight: '800', textAlign: 'center', marginTop: Spacing.two },
-  tagline: { textAlign: 'center', maxWidth: 520, alignSelf: 'center', marginBottom: Spacing.three },
-  navCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-  },
-  pressed: { opacity: 0.7 },
-  navEmoji: { fontSize: 30 },
-  navTextWrap: { flex: 1 },
-  navTitle: { fontSize: 17, fontWeight: '800' },
-  navBlurb: { marginTop: 2, lineHeight: 20 },
-  chevron: { fontSize: 28, fontWeight: '800' },
-  crisisCard: { borderWidth: 1.5, borderRadius: Spacing.three, padding: Spacing.three },
-  mission: { borderWidth: 1, borderRadius: Spacing.three, padding: Spacing.three, marginTop: Spacing.three },
+  inner: { width: '100%', maxWidth: MaxContentWidth },
+  masthead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two + 2 },
+  monogram: { width: 38, height: 38, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  monogramLetter: { fontFamily: Fonts.serif, fontStyle: 'italic', fontWeight: '700', fontSize: 23, lineHeight: 28, color: '#fdfbf5' },
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  footRule: { marginTop: Spacing.four },
+  tagline: { marginTop: Spacing.three, marginBottom: Spacing.four },
+  crisis: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginBottom: Spacing.four },
+  crisisLine: { marginTop: Spacing.one + 2, lineHeight: 20 },
+  index: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  rowText: { flex: 1 },
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  rowTitle: { fontFamily: Fonts.serif, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  rowBlurb: { marginTop: 2 },
+  badge: { minWidth: 20, paddingHorizontal: 5, paddingVertical: 1, borderRadius: Radius.sm, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
+  badgeText: { fontSize: 11.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  arrow: { fontSize: 17 },
+  pressed: { opacity: 0.75 },
+  mission: { marginTop: Spacing.three },
 });

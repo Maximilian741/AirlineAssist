@@ -2,14 +2,17 @@
  * Presentational components for the "Your Rights" guide. Data comes from src/data/rights.ts.
  * Links open in the in-app browser (expo-web-browser) so we don't fight typed-route Href typing
  * for dynamic external URLs.
+ *
+ * Styling follows constants/theme.ts: warm paper, hairline rules, and ONE bordered sheet per group
+ * (the sheet belongs to the screen) whose rows are separated by a hairline. Every row takes a
+ * `first` flag so it can skip that top rule. No emoji in the chrome, no shadows, no pills.
  */
 import { openBrowserAsync } from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { IntlComp, Law, LadderStep, ResourceLink, RightCard, Source } from '@/data/rights';
 import { statusKind } from '@/data/rights';
@@ -18,13 +21,18 @@ function openUrl(url?: string) {
   if (url) openBrowserAsync(url).catch(() => {});
 }
 
-export function SectionHeader({ emoji, title, subtitle }: { emoji?: string; title: string; subtitle?: string }) {
+/** Hairline above every row but the first — the rule that turns a stack into a sheet. */
+function useTopRule(first?: boolean) {
+  const theme = useTheme();
+  return first ? null : { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line };
+}
+
+export function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  const theme = useTheme();
   return (
     <View style={styles.sectionHeader}>
-      <ThemedText style={styles.sectionTitle} themeColor="brandDeep">
-        {emoji ? emoji + '  ' : ''}
-        {title}
-      </ThemedText>
+      <View style={[styles.sectionRule, { backgroundColor: theme.line }]} />
+      <ThemedText type="section">{title}</ThemedText>
       {subtitle ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.sectionSub}>
           {subtitle}
@@ -35,11 +43,12 @@ export function SectionHeader({ emoji, title, subtitle }: { emoji?: string; titl
 }
 
 export function Hero() {
+  const theme = useTheme();
   return (
     <View style={styles.hero}>
-      <ThemedText style={styles.heroEmoji}>🛡️</ThemedText>
-      <ThemedText style={styles.heroTitle}>Your rights against the airline</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.heroText}>
+      <ThemedText type="display">Your rights against the airline</ThemedText>
+      <View style={[styles.heroRule, { backgroundColor: theme.line }]} />
+      <ThemedText type="lede" themeColor="textSecondary" style={styles.heroText}>
         Airlines count on you not knowing the rules. Here’s what they legally owe you — the exact
         amounts, the deadlines, and a link to the government source behind every one. Works offline.
       </ThemedText>
@@ -52,7 +61,7 @@ function SourceLinks({ sources }: { sources: Source[] }) {
   if (!sources?.length) return null;
   return (
     <View style={styles.sourcesRow}>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.sourcesLabel}>
         Sources:{' '}
       </ThemedText>
       {sources.map((s, i) => (
@@ -71,7 +80,7 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
     <View style={styles.detailRow}>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.detailLabel}>
+      <ThemedText type="eyebrow" themeColor="textSecondary">
         {label.toUpperCase()}
       </ThemedText>
       <ThemedText type="small" style={styles.detailValue}>
@@ -81,23 +90,38 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
   );
 }
 
-export function RightCardView({ card }: { card: RightCard }) {
+/** The disclosure line under a row: a functional caret, never an icon tile. */
+function Disclosure({ open, onPress, label }: { open: boolean; onPress: () => void; label: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
+      <ThemedText type="smallBold" style={{ color: theme.brand }}>
+        {open ? '▾ ' : '▸ '}
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+export function RightCardView({ card, first }: { card: RightCard; first?: boolean }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const topRule = useTopRule(first);
   return (
-    <ThemedView type="card" style={[styles.card, { borderLeftColor: theme.good, borderColor: theme.line }]}>
-      <ThemedText style={styles.cardHead}>{card.headline}</ThemedText>
-      <ThemedText type="small" style={styles.cardPlain}>
+    <View style={[styles.row, topRule]}>
+      <ThemedText style={styles.rowHead}>{card.headline}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.rowBody}>
         {card.plain}
       </ThemedText>
-      <Pressable
+      <Disclosure
+        open={open}
         onPress={() => setOpen((v) => !v)}
-        hitSlop={10}
-        style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
-        <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>
-          {open ? '▾ ' : '▸ '}How to claim it &amp; the fine print
-        </ThemedText>
-      </Pressable>
+        label="How to claim it & the fine print"
+      />
       {open ? (
         <View style={[styles.detailWrap, { borderTopColor: theme.line }]}>
           <DetailRow label="How much / the numbers" value={card.amounts} />
@@ -107,15 +131,16 @@ export function RightCardView({ card }: { card: RightCard }) {
           <SourceLinks sources={card.sources} />
         </View>
       ) : null}
-    </ThemedView>
+    </View>
   );
 }
 
-export function LadderStepView({ step }: { step: LadderStep }) {
+export function LadderStepView({ step, first }: { step: LadderStep; first?: boolean }) {
   const theme = useTheme();
+  const topRule = useTopRule(first);
   return (
-    <View style={styles.ladderRow}>
-      <View style={[styles.ladderNum, { backgroundColor: theme.brand }]}>
+    <View style={[styles.row, styles.ladderRow, topRule]}>
+      <View style={[styles.ladderNum, { backgroundColor: theme.brandDeep }]}>
         <ThemedText style={styles.ladderNumText}>{step.step}</ThemedText>
       </View>
       <View style={styles.ladderBody}>
@@ -125,7 +150,7 @@ export function LadderStepView({ step }: { step: LadderStep }) {
         </ThemedText>
         {step.url ? (
           <Pressable onPress={() => openUrl(step.url)} hitSlop={10} style={styles.sourceTap}>
-            <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>
+            <ThemedText type="smallBold" style={{ color: theme.brand }}>
               Open ↗
             </ThemedText>
           </Pressable>
@@ -135,28 +160,24 @@ export function LadderStepView({ step }: { step: LadderStep }) {
   );
 }
 
-export function IntlCardView({ item }: { item: IntlComp }) {
+export function IntlCardView({ item, first }: { item: IntlComp; first?: boolean }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const topRule = useTopRule(first);
   return (
-    <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.brand }]}>
+    <View style={[styles.row, topRule]}>
       <View style={styles.intlHead}>
-        <ThemedText style={styles.intlRegime} themeColor="brandDeep">
-          {item.regime}
-        </ThemedText>
-        <ThemedText style={[styles.intlAmount, { color: theme.good }]}>{item.amount}</ThemedText>
+        <ThemedText style={styles.rowHead}>{item.regime}</ThemedText>
+        <ThemedText type="money">{item.amount}</ThemedText>
       </View>
       <ThemedText type="small" themeColor="textSecondary" style={styles.intlRegion}>
         {item.region}
       </ThemedText>
-      <Pressable
+      <Disclosure
+        open={open}
         onPress={() => setOpen((v) => !v)}
-        hitSlop={10}
-        style={({ pressed }) => [styles.toggle, pressed && styles.pressed]}>
-        <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>
-          {open ? '▾ ' : '▸ '}Who qualifies &amp; how to claim
-        </ThemedText>
-      </Pressable>
+        label="Who qualifies & how to claim"
+      />
       {open ? (
         <View style={[styles.detailWrap, { borderTopColor: theme.line }]}>
           <DetailRow label="Who qualifies" value={item.eligibility} />
@@ -164,118 +185,122 @@ export function IntlCardView({ item }: { item: IntlComp }) {
           <SourceLinks sources={item.sources} />
         </View>
       ) : null}
-    </ThemedView>
-  );
-}
-
-function Pill({ kind, label }: { kind: 'in-force' | 'pending' | 'dead'; label: string }) {
-  const theme = useTheme();
-  const map = {
-    'in-force': { bg: theme.goodBg, fg: theme.good },
-    pending: { bg: theme.warnBg, fg: theme.warn },
-    dead: { bg: theme.badBg, fg: theme.bad },
-  } as const;
-  const c = map[kind];
-  return (
-    <View style={[styles.pill, { backgroundColor: c.bg }]}>
-      <ThemedText style={[styles.pillText, { color: c.fg }]}>{label}</ThemedText>
     </View>
   );
 }
 
-export function LawCardView({ law }: { law: Law }) {
+/** Legislation status: a small-caps tag with a hairline border, not a coloured pill. */
+function StatusTag({ kind, label }: { kind: 'in-force' | 'pending' | 'dead'; label: string }) {
+  const theme = useTheme();
+  const fg = kind === 'in-force' ? theme.good : kind === 'dead' ? theme.bad : theme.warn;
+  return (
+    <View style={[styles.tag, { borderColor: fg }]}>
+      <ThemedText style={[styles.tagText, { color: fg }]}>{label}</ThemedText>
+    </View>
+  );
+}
+
+export function LawCardView({ law, first }: { law: Law; first?: boolean }) {
   const theme = useTheme();
   const kind = statusKind(law.status);
-  const edge = kind === 'in-force' ? theme.good : kind === 'dead' ? theme.bad : theme.warn;
+  const topRule = useTopRule(first);
   return (
-    <ThemedView type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: edge }]}>
+    <View style={[styles.row, topRule]}>
       <View style={styles.lawHead}>
         <ThemedText style={styles.lawName}>
           {law.name}
           {law.year ? <ThemedText type="small" themeColor="textSecondary">{'  ' + law.year}</ThemedText> : null}
         </ThemedText>
       </View>
-      <View style={styles.pillWrap}>
-        <Pill kind={kind} label={law.status} />
+      <View style={styles.tagWrap}>
+        <StatusTag kind={kind} label={law.status} />
       </View>
       <ThemedText type="small" style={styles.lawSummary}>
         {law.summary}
       </ThemedText>
       {law.whyItMatters ? (
-        <ThemedView type="backgroundElement" style={styles.whyBox}>
+        <View style={[styles.whyBox, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
           <ThemedText type="small">
             <ThemedText type="smallBold">Why it matters: </ThemedText>
             {law.whyItMatters}
           </ThemedText>
-        </ThemedView>
+        </View>
       ) : null}
       <SourceLinks sources={law.sources} />
-    </ThemedView>
+    </View>
   );
 }
 
-export function ResourceCardView({ item }: { item: ResourceLink }) {
+export function ResourceCardView({ item, first }: { item: ResourceLink; first?: boolean }) {
   const theme = useTheme();
+  const topRule = useTopRule(first);
+  // The visual block lives inside the Pressable: on web an anchor wrapper doesn't inherit a
+  // Pressable's layout, so only the pressed opacity rides on the Pressable itself.
   return (
-    <Pressable onPress={() => openUrl(item.url)} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView type="backgroundElement" style={[styles.resource, { borderColor: theme.line }]}>
+    <Pressable onPress={() => openUrl(item.url)} style={({ pressed }) => (pressed ? styles.pressed : null)}>
+      <View style={[styles.row, topRule]}>
         <ThemedText style={styles.resourceTitle}>{item.title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.resourceBlurb}>
           {item.blurb}
         </ThemedText>
         {item.url ? (
-          <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700', marginTop: Spacing.one }}>
+          <ThemedText type="smallBold" style={{ color: theme.brand, marginTop: Spacing.two }}>
             Open ↗
           </ThemedText>
         ) : null}
-      </ThemedView>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  // ---- section rhythm: rule, serif title, deck ----
   sectionHeader: { marginTop: Spacing.five, marginBottom: Spacing.three },
-  sectionTitle: { fontSize: 19, fontWeight: '800', lineHeight: 26 },
-  sectionSub: { marginTop: Spacing.one },
-  hero: { alignItems: 'center', paddingVertical: Spacing.four, gap: Spacing.one },
-  heroEmoji: { fontSize: 44, lineHeight: 52 },
-  heroTitle: { fontSize: 24, fontWeight: '800', textAlign: 'center' },
-  heroText: { textAlign: 'center', maxWidth: 560, marginTop: Spacing.one },
-  pressed: { opacity: 0.6 },
+  sectionRule: { height: StyleSheet.hairlineWidth, marginBottom: Spacing.three },
+  sectionSub: { marginTop: Spacing.one + 2, maxWidth: 620 },
+
+  hero: { paddingTop: Spacing.two, paddingBottom: Spacing.four },
+  heroRule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  heroText: { marginTop: Spacing.three, maxWidth: 620 },
+
+  // ---- one row of a sheet ----
+  row: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  rowHead: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 24, fontWeight: '700', flexShrink: 1 },
+  rowBody: { marginTop: Spacing.one + 2 },
+
+  pressed: { opacity: 0.75 },
   toggle: { minHeight: 44, justifyContent: 'center', marginTop: Spacing.one },
   sourceTap: { minHeight: 36, justifyContent: 'center' },
-  card: {
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-    marginBottom: Spacing.two,
+
+  detailWrap: {
+    marginTop: Spacing.two,
+    paddingTop: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.three,
   },
-  cardHead: { fontSize: 16, fontWeight: '800', lineHeight: 22 },
-  cardPlain: { marginTop: Spacing.one, lineHeight: 21 },
-  detailWrap: { marginTop: Spacing.two, paddingTop: Spacing.two, borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.two },
-  detailRow: { gap: 2 },
-  detailLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
-  detailValue: { lineHeight: 20 },
+  detailRow: { gap: 3 },
+  detailValue: { lineHeight: 21 },
   sourcesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: Spacing.one },
-  ladderRow: { flexDirection: 'row', gap: Spacing.three, marginBottom: Spacing.three },
-  ladderNum: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  ladderNumText: { color: '#ffffff', fontWeight: '800' },
-  ladderBody: { flex: 1, gap: Spacing.one },
-  ladderAction: { fontSize: 15, fontWeight: '800' },
-  ladderDetail: { lineHeight: 20 },
+  sourcesLabel: { marginRight: Spacing.one },
+
+  ladderRow: { flexDirection: 'row', gap: Spacing.three },
+  ladderNum: { width: 26, height: 26, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  ladderNumText: { color: '#fdfbf5', fontWeight: '700', fontSize: 13.5, lineHeight: 18, fontVariant: ['tabular-nums'] },
+  ladderBody: { flex: 1 },
+  ladderAction: { fontFamily: Fonts.serif, fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  ladderDetail: { marginTop: Spacing.one },
+
   intlHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: Spacing.two },
-  intlRegime: { fontSize: 17, fontWeight: '800' },
-  intlAmount: { fontSize: 15, fontWeight: '800' },
   intlRegion: { marginTop: 2 },
+
   lawHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
-  lawName: { fontSize: 15, fontWeight: '800', flexShrink: 1 },
-  pillWrap: { flexDirection: 'row', marginTop: Spacing.two },
-  pill: { borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 4 },
-  pillText: { fontSize: 12.5, fontWeight: '800' },
+  lawName: { fontFamily: Fonts.serif, fontSize: 16, lineHeight: 22, fontWeight: '700', flexShrink: 1 },
+  tagWrap: { flexDirection: 'row', marginTop: Spacing.two },
+  tag: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two - 1, paddingVertical: 2 },
+  tagText: { fontSize: 11, lineHeight: 15, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase' },
   lawSummary: { marginTop: Spacing.two, lineHeight: 21 },
-  whyBox: { marginTop: Spacing.two, borderRadius: Spacing.two, padding: Spacing.two },
-  resource: { borderWidth: 1, borderRadius: Spacing.three, padding: Spacing.three, marginBottom: Spacing.two },
-  resourceTitle: { fontSize: 15, fontWeight: '800' },
-  resourceBlurb: { marginTop: 2, lineHeight: 20 },
+  whyBox: { marginTop: Spacing.three, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, padding: Spacing.two + 2 },
+
+  resourceTitle: { fontFamily: Fonts.serif, fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  resourceBlurb: { marginTop: 2 },
 });

@@ -14,7 +14,7 @@ import { CocDecoder } from '@/components/coc-decoder';
 import { CoverageChecker, GapTable } from '@/components/coverage-checker';
 import { Scorecard } from '@/components/scorecard';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import {
   ALLIES,
   CATEGORIES,
@@ -30,6 +30,8 @@ import { useTheme } from '@/hooks/use-theme';
 export default function RightsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // Every group of rows shares one bordered sheet; the rows rule themselves off with a hairline.
+  const sheet = [styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }];
 
   return (
     <ScrollView
@@ -42,21 +44,18 @@ export default function RightsScreen() {
         <Hero />
 
         <SectionHeader
-          emoji="🌍"
           title="Does EU law cover your flight?"
           subtitle="The answer is counterintuitive — and worth up to €600."
         />
         <CoverageChecker />
 
         <SectionHeader
-          emoji="📜"
           title="Your airline's own contract"
           subtitle="The rules they wrote — with the rule number to quote back at them."
         />
         <CocDecoder />
 
         <SectionHeader
-          emoji="💰"
           title="What the airline owes you"
           subtitle="Tap any card for the exact amounts, deadlines, and how to claim it."
         />
@@ -65,67 +64,77 @@ export default function RightsScreen() {
           if (!items.length) return null;
           return (
             <View key={c.key} style={styles.cat}>
-              <ThemedText themeColor="textSecondary" style={styles.catLabel}>
-                {c.emoji}  {c.label.toUpperCase()}
+              <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.catLabel}>
+                {c.label.toUpperCase()}
               </ThemedText>
-              {items.map((card, i) => (
-                <RightCardView key={i} card={card} />
-              ))}
+              <View style={sheet}>
+                {items.map((card, i) => (
+                  <RightCardView key={i} card={card} first={i === 0} />
+                ))}
+              </View>
             </View>
           );
         })}
 
         <SectionHeader
-          emoji="🪜"
           title="How to actually get paid"
           subtitle="Work down the ladder — most cases settle by step 3, the free DOT complaint."
         />
-        {LADDER.map((s) => (
-          <LadderStepView key={s.step} step={s} />
-        ))}
+        <View style={sheet}>
+          {LADDER.map((s, i) => (
+            <LadderStepView key={s.step} step={s} first={i === 0} />
+          ))}
+        </View>
 
         <SectionHeader
-          emoji="🌍"
           title="Europe / UK / Canada? They may owe you cash"
           subtitle="These laws pay real money for delays and cancellations — most Americans never claim it. A flight home from Europe counts, even on a U.S. airline."
         />
-        {INTERNATIONAL.map((it, i) => (
-          <IntlCardView key={i} item={it} />
-        ))}
+        <View style={sheet}>
+          {INTERNATIONAL.map((it, i) => (
+            <IntlCardView key={i} item={it} first={i === 0} />
+          ))}
+        </View>
 
         <SectionHeader
-          emoji="📜"
           title="The law — what’s real, what’s not"
-          subtitle="🟢 in force today · 🟡 proposed or promised but not enforceable · 🔴 struck down. Kept honest so you never claim something that isn’t actually law."
+          subtitle="in force today · proposed or promised but not enforceable · struck down. Kept honest so you never claim something that isn’t actually law."
         />
-        {LEGISLATION.map((l, i) => (
-          <LawCardView key={i} law={l} />
-        ))}
+        <View style={sheet}>
+          {LEGISLATION.map((l, i) => (
+            <LawCardView key={i} law={l} first={i === 0} />
+          ))}
+        </View>
 
         <SectionHeader
-          emoji="⚖️"
           title="Same bad day, two continents"
           subtitle="What you'd be owed in the U.S. versus in Europe."
         />
         <GapTable />
 
-        <SectionHeader emoji="📊" title="The airlines, by the government’s numbers" subtitle="Same period, same metric, same source for every airline." />
+        <SectionHeader title="The airlines, by the government’s numbers" subtitle="Same period, same metric, same source for every airline." />
         <Scorecard />
 
         <SectionHeader title="Check the airline’s record" subtitle="Public data — independent sources." />
-        {STATS_LINKS.map((r, i) => (
-          <ResourceCardView key={i} item={r} />
-        ))}
+        <View style={sheet}>
+          {STATS_LINKS.map((r, i) => (
+            <ResourceCardView key={i} item={r} first={i === 0} />
+          ))}
+        </View>
 
-        <SectionHeader emoji="✍️" title="Leave a review" subtitle="Document a bad experience where other travelers will see it." />
-        {REVIEW_LINKS.map((r, i) => (
-          <ResourceCardView key={i} item={r} />
-        ))}
+        <SectionHeader title="Leave a review" subtitle="Document a bad experience where other travelers will see it." />
+        <View style={sheet}>
+          {REVIEW_LINKS.map((r, i) => (
+            <ResourceCardView key={i} item={r} first={i === 0} />
+          ))}
+        </View>
 
-        <SectionHeader emoji="🤝" title="Who’s on your side" />
-        {ALLIES.map((r, i) => (
-          <ResourceCardView key={i} item={r} />
-        ))}
+        <SectionHeader title="Who’s on your side" />
+        <View style={sheet}>
+          {ALLIES.map((r, i) => (
+            <ResourceCardView key={i} item={r} first={i === 0} />
+          ))}
+        </View>
       </View>
     </ScrollView>
   );
@@ -134,6 +143,7 @@ export default function RightsScreen() {
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth },
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
   cat: { marginBottom: Spacing.three },
-  catLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4, marginBottom: Spacing.two, marginTop: Spacing.one },
+  catLabel: { marginBottom: Spacing.two, marginTop: Spacing.one },
 });

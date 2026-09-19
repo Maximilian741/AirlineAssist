@@ -1,10 +1,16 @@
+/**
+ * The web tab bar: a full-width sheet of paper across the top, closed by a hairline rule, with the
+ * serif wordmark on the left and the section names running along it. The chosen one is marked by an
+ * oxblood underline sitting on that rule — the same tab row as the web app. Screens reserve the
+ * space with TopTabInset. See constants/theme.ts.
+ */
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function AppTabs() {
   return (
@@ -40,26 +46,32 @@ export default function AppTabs() {
 }
 
 export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+  const theme = useTheme();
+
   return (
+    // The anchor expo-router renders on web does not inherit the Pressable's layout, so the
+    // padding and the underline live on the inner view and only the pressed state stays here.
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView type={isFocused ? 'backgroundSelected' : 'backgroundElement'} style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
+      <View style={[styles.tabButtonView, { borderBottomColor: isFocused ? theme.bad : 'transparent' }]}>
+        <ThemedText
+          type="small"
+          style={[isFocused ? styles.tabLabelActive : styles.tabLabel, { color: isFocused ? theme.text : theme.textSecondary }]}>
           {children}
         </ThemedText>
-      </ThemedView>
+      </View>
     </Pressable>
   );
 }
 
 export function CustomTabList(props: TabListProps) {
+  const theme = useTheme();
+
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          Fairfare
-        </ThemedText>
+    <View {...props} style={[styles.tabListContainer, { backgroundColor: theme.card, borderBottomColor: theme.line }]}>
+      <View style={styles.innerContainer}>
+        <ThemedText style={styles.brandText}>Fairfare</ThemedText>
         {props.children}
-      </ThemedView>
+      </View>
     </View>
   );
 }
@@ -67,27 +79,37 @@ export function CustomTabList(props: TabListProps) {
 const styles = StyleSheet.create({
   tabListContainer: {
     position: 'absolute',
+    top: 0,
     width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.three,
     flexDirection: 'row',
+    justifyContent: 'center',
   },
   innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
+    width: '100%',
     maxWidth: MaxContentWidth,
+    flexDirection: 'row',
+    // Stretch, so each tab's underline lands on the bar's own bottom rule.
+    alignItems: 'stretch',
+    gap: Spacing.three,
   },
-  brandText: { marginRight: 'auto' },
-  pressed: { opacity: 0.7 },
+  brandText: {
+    fontFamily: Fonts.serif,
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: '700',
+    alignSelf: 'center',
+    marginRight: 'auto',
+  },
+  pressed: { opacity: 0.75 },
   tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    justifyContent: 'center',
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.half,
+    borderBottomWidth: 2,
+    marginBottom: -StyleSheet.hairlineWidth,
   },
+  tabLabel: { fontWeight: '600' },
+  tabLabelActive: { fontWeight: '700' },
 });

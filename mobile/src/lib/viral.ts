@@ -67,7 +67,8 @@ export function cardCopy(res: ClaimResult, a: Answers, d: Details): ShareCopy | 
     headline: phrase ? `${al} owes me ${phrase}.` : `${al} owes me — here’s the rule.`,
     sub: e.condition ? `Conditions apply: ${e.condition}.` : 'Most people never ask for it.',
     panelLabel: 'THEY OWE ME',
-    big: (amount || named || (pct ? `${pct[1]}% of my fare` : '') || 'see the rule').toUpperCase(),
+    // Set as written: the small-caps label above it is the shout, the figure itself is just set well.
+    big: amount || named || (pct ? `${pct[1]}% of my fare` : '') || 'See the rule',
     rule,
   };
 }

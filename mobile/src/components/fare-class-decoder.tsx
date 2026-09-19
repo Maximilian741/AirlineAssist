@@ -7,12 +7,15 @@
  * the typical structure and says so.
  *
  * Logic: lib/fareclass.ts (parity-tested against the web module across every letter × tier).
+ *
+ * Looks: the editorial system in constants/theme.ts — the letter is set in the mono face, because it
+ * is a code; the verdict is the only place colour is allowed to speak.
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { decode, eligibleList, type TierId } from '@/lib/fareclass';
 
@@ -36,7 +39,7 @@ export function FareClassDecoder() {
 
       <View style={styles.inputRow}>
         <View>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.label}>BOOKING CLASS</ThemedText>
+          <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.label}>BOOKING CLASS</ThemedText>
           <TextInput
             value={code}
             // Keep the LAST letter typed, so typing over an old letter replaces it instead of being ignored.
@@ -47,11 +50,11 @@ export function FareClassDecoder() {
             placeholder="T"
             placeholderTextColor={theme.textSecondary}
             accessibilityLabel="Booking class letter"
-            style={[styles.input, { borderColor: theme.line, color: theme.text, backgroundColor: theme.card }]}
+            style={[styles.input, { borderColor: theme.line, color: theme.text, backgroundColor: theme.backgroundElement }]}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.label}>YOUR CARD</ThemedText>
+          <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.label}>YOUR CARD</ThemedText>
           <View style={styles.chips}>
             {(['platinum', 'reserve'] as TierId[]).map((t) => {
               const on = t === tier;
@@ -61,8 +64,12 @@ export function FareClassDecoder() {
                   onPress={() => setTier(t)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
-                  style={[styles.chip, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-                  <ThemedText type="small" style={{ fontWeight: on ? '800' : '500' }}>{t === 'reserve' ? 'Reserve' : 'Platinum'}</ThemedText>
+                  style={({ pressed }) => [
+                    styles.chip,
+                    { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' },
+                    pressed ? styles.pressed : null,
+                  ]}>
+                  <ThemedText type="small" style={{ fontWeight: on ? '700' : '400' }}>{t === 'reserve' ? 'Reserve' : 'Platinum'}</ThemedText>
                 </Pressable>
               );
             })}
@@ -71,21 +78,23 @@ export function FareClassDecoder() {
       </View>
 
       {raw && !d ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.body}>Enter a single letter from your confirmation.</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>Enter a single letter from your confirmation.</ThemedText>
       ) : null}
 
       {d && !d.known ? (
-        <ThemedView type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.line }]}>
-          <ThemedText style={styles.cardTitle}>Class {d.code}</ThemedText>
-          <ThemedText type="small" style={styles.body}>{d.summary}</ThemedText>
-        </ThemedView>
+        <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <View style={styles.sheetRow}>
+            <ThemedText style={styles.cardTitle}>Class {d.code}</ThemedText>
+            <ThemedText type="small" style={styles.body}>{d.summary}</ThemedText>
+          </View>
+        </View>
       ) : null}
 
       {d && d.known ? (
-        <ThemedView type="card" style={[styles.card, { borderColor: d.cert.ok ? theme.good : theme.bad, borderLeftColor: d.cert.ok ? theme.good : theme.bad }]}>
+        <View style={[styles.verdict, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: d.cert.ok ? theme.good : theme.bad }]}>
           <View style={styles.cardHead}>
             <ThemedText style={[styles.cardTitle, { flex: 1 }]}>Class {d.code} — {d.tier}</ThemedText>
-            <ThemedText type="small" style={{ fontWeight: '800', color: d.cert.ok ? theme.good : theme.bad }}>
+            <ThemedText type="eyebrow" style={{ color: d.cert.ok ? theme.good : theme.bad }}>
               {d.cert.ok ? 'Certificate works' : 'Not eligible'}
             </ThemedText>
           </View>
@@ -107,7 +116,7 @@ export function FareClassDecoder() {
               Worth knowing: this is exactly what the Reserve card buys you over Platinum — the higher cabins.
             </ThemedText>
           ) : null}
-        </ThemedView>
+        </View>
       ) : null}
 
       <EligibleList tier={tier} theme={theme} />
@@ -117,40 +126,56 @@ export function FareClassDecoder() {
 
 function EligibleList({ tier, theme }: { tier: TierId; theme: Theme }) {
   return (
-    <ThemedView type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: theme.brand }]}>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.label}>WHAT YOUR CERTIFICATE CAN ACTUALLY TICKET</ThemedText>
+    <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+      <View style={styles.sheetHead}>
+        <ThemedText type="eyebrow" themeColor="textSecondary">WHAT YOUR CERTIFICATE CAN ACTUALLY TICKET</ThemedText>
+      </View>
       {eligibleList(tier).map((g) => (
-        <View key={g.cabin} style={[styles.elRow, { borderBottomColor: theme.line }]}>
-          <ThemedText type="small" style={{ fontWeight: '700', flex: 1 }}>{g.cabin}</ThemedText>
+        <View key={g.cabin} style={[styles.elRow, { borderTopColor: theme.line }]}>
+          <ThemedText style={styles.elCabin}>{g.cabin}</ThemedText>
           <View style={styles.codes}>
             {g.codes.map((c) => (
-              <View key={c} style={[styles.code, { borderColor: theme.line }]}>
-                <ThemedText type="small" style={{ fontWeight: '800', color: theme.brand }}>{c}</ThemedText>
+              <View key={c} style={[styles.code, { borderColor: theme.line, backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="code" style={styles.codeText}>{c}</ThemedText>
               </View>
             ))}
           </View>
         </View>
       ))}
-      <ThemedText type="small" themeColor="textSecondary" style={[styles.body, { fontSize: 12.5 }]}>
-        These seats have to be open for sale in that exact bucket — that’s why a flight can show plenty of empty seats and still
-        refuse the certificate.
-      </ThemedText>
-    </ThemedView>
+      <View style={[styles.elFoot, { borderTopColor: theme.line }]}>
+        <ThemedText type="small" themeColor="textSecondary">
+          These seats have to be open for sale in that exact bucket — that’s why a flight can show plenty of empty seats and still
+          refuse the certificate.
+        </ThemedText>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  lede: { lineHeight: 20, marginBottom: 10 },
-  inputRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  label: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, marginBottom: 6 },
-  input: { borderWidth: 1.5, borderRadius: 8, width: 64, height: 48, fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, minHeight: 44, justifyContent: 'center' },
-  card: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 8, padding: 12, marginTop: 10 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  body: { lineHeight: 19, marginTop: 4 },
-  elRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: 1, gap: 8 },
-  codes: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' },
-  code: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 1 },
+  lede: { marginBottom: Spacing.three },
+  inputRow: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
+  label: { marginBottom: Spacing.two },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, width: 64, height: 48, fontFamily: Fonts.mono, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.three - 4, paddingVertical: Spacing.two, minHeight: 44, justifyContent: 'center' },
+  hint: { marginTop: Spacing.three },
+
+  // the verdict: the one place colour speaks
+  verdict: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, paddingVertical: Spacing.three, paddingHorizontal: Spacing.three, marginTop: Spacing.three },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  cardTitle: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 23, fontWeight: '700' },
+  body: { marginTop: Spacing.one + 2 },
+
+  // one sheet, hairline-separated rows
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden', marginTop: Spacing.three },
+  sheetHead: { paddingHorizontal: Spacing.three, paddingTop: Spacing.three, paddingBottom: Spacing.two },
+  sheetRow: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  elRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two + 2, paddingHorizontal: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
+  elCabin: { fontFamily: Fonts.serif, fontSize: 15.5, lineHeight: 21, fontWeight: '700', flex: 1 },
+  codes: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one, justifyContent: 'flex-end' },
+  code: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
+  codeText: { fontSize: 13, fontWeight: '700' },
+  elFoot: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
+  pressed: { opacity: 0.75 },
 });

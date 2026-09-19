@@ -80,7 +80,7 @@ test('the exact bump amount is shown; a ceiling is never presented as what they 
   const c = webViral.cardCopy(webCE.assess(noFare), noFare, D);
   assert.match(c.headline, /owes me 400% of my fare, capped at \$2,150/);
   assert.doesNotMatch(c.headline, /owes me \$2,150|owes me up to/);
-  assert.equal(c.big, '400% OF MY FARE');
+  assert.equal(c.big, '400% of my fare');
 
   // A bag liability is a ceiling on a provable loss, in either regime — never "owes me".
   for (const [name, figure] of [['lost bag (U.S.)', '$4,700'], ['lost bag (international)', '1,519 SDR'], ['bag still missing, no report', '1,519 SDR']]) {

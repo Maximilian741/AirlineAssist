@@ -3,10 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { TrendBlock } from '@/components/trend-block';
 import { API_BASE, HAS_API, ORIGIN } from '@/config';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Offer = {
@@ -64,7 +63,7 @@ export default function SearchScreen() {
       return;
     }
     if (!HAS_API) {
-      setError('Live flight prices aren’t set up in this version yet — but the 🛡️ Your Rights tab works fully, with no internet or setup.');
+      setError('Live flight prices aren’t set up in this version yet — but the Your Rights tab works fully, with no internet or setup.');
       return;
     }
     setLoading(true);
@@ -104,23 +103,24 @@ export default function SearchScreen() {
         { paddingTop: insets.top + TopTabInset + Spacing.four, paddingBottom: insets.bottom + BottomTabInset + Spacing.four },
       ]}>
       <View style={styles.inner}>
-        <ThemedText style={styles.title}>Find companion deals</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="display">Find companion deals</ThemedText>
+        <View style={[styles.rule, { backgroundColor: theme.line }]} />
+        <ThemedText type="lede" themeColor="textSecondary" style={styles.standfirst}>
           Round trips from {ORIGIN} (Helena). All Delta routes connect through Salt Lake City.
         </ThemedText>
 
         {!HAS_API ? (
-          <ThemedView type="backgroundElement" style={[styles.banner, { borderColor: theme.warn }]}>
+          <View style={[styles.note, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.warn }]}>
             <ThemedText type="smallBold">Live flight prices aren’t connected yet.</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4 }}>
-              This version doesn’t have a flight-price connection set up. Everything in the 🛡️ Your Rights tab
+              This version doesn’t have a flight-price connection set up. Everything in the Your Rights tab
               works right now — no internet or setup needed.
             </ThemedText>
-          </ThemedView>
+          </View>
         ) : null}
 
         <View style={styles.field}>
-          <ThemedText type="small" themeColor="textSecondary">Destination</ThemedText>
+          <ThemedText type="eyebrow" themeColor="textSecondary">Destination</ThemedText>
           <TextInput
             value={destination}
             onChangeText={setDestination}
@@ -134,17 +134,17 @@ export default function SearchScreen() {
 
         <View style={styles.row}>
           <View style={[styles.field, styles.flex1]}>
-            <ThemedText type="small" themeColor="textSecondary">Depart</ThemedText>
+            <ThemedText type="eyebrow" themeColor="textSecondary">Depart</ThemedText>
             <TextInput value={depart} onChangeText={setDepart} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textSecondary} autoCorrect={false} style={inputStyle} />
           </View>
           <View style={[styles.field, styles.flex1]}>
-            <ThemedText type="small" themeColor="textSecondary">Return</ThemedText>
+            <ThemedText type="eyebrow" themeColor="textSecondary">Return</ThemedText>
             <TextInput value={ret} onChangeText={setRet} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textSecondary} autoCorrect={false} style={inputStyle} />
           </View>
         </View>
 
         <View style={styles.field}>
-          <ThemedText type="small" themeColor="textSecondary">Your Delta card</ThemedText>
+          <ThemedText type="eyebrow" themeColor="textSecondary">Your Delta card</ThemedText>
           <View style={styles.toggleRow}>
             {(['platinum', 'reserve'] as const).map((t) => {
               const on = tier === t;
@@ -154,9 +154,9 @@ export default function SearchScreen() {
                   onPress={() => setTier(t)}
                   style={[
                     styles.toggle,
-                    { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card },
+                    { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.backgroundSelected : 'transparent' },
                   ]}>
-                  <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>
+                  <ThemedText type="small" style={{ fontWeight: on ? '700' : '500', color: on ? theme.text : theme.textSecondary }}>
                     {t === 'platinum' ? 'Platinum' : 'Reserve'}
                   </ThemedText>
                 </Pressable>
@@ -165,32 +165,39 @@ export default function SearchScreen() {
           </View>
         </View>
 
-        <Pressable onPress={run} disabled={loading} style={({ pressed }) => [styles.cta, { backgroundColor: theme.brand }, (pressed || loading) && { opacity: 0.7 }]}>
-          {loading ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.ctaText}>Find companion value</ThemedText>}
+        <Pressable onPress={run} disabled={loading} style={({ pressed }) => ((pressed || loading) ? styles.pressed : null)}>
+          <View style={[styles.cta, { backgroundColor: theme.brandDeep }]}>
+            {loading ? <ActivityIndicator color="#fdfbf5" /> : <ThemedText style={styles.ctaText}>Find companion value</ThemedText>}
+          </View>
         </Pressable>
 
         {error ? (
-          <ThemedView type="backgroundElement" style={[styles.banner, { borderColor: theme.bad }]}>
+          <View style={[styles.note, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.bad }]}>
             <ThemedText type="small" style={{ color: theme.bad }}>{error}</ThemedText>
-          </ThemedView>
+          </View>
         ) : null}
 
         {offers ? (
-          <View style={{ marginTop: Spacing.three }}>
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>
+          <View style={styles.results}>
+            <View style={[styles.rule, styles.resultsRule, { backgroundColor: theme.line }]} />
+            <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.resultsCount}>
               {offers.length} Delta option{offers.length === 1 ? '' : 's'} to {destination.trim().toUpperCase()}
               {source ? ` · ${source.startsWith('amadeus') ? 'live · Amadeus' : source.startsWith('googleflights') ? 'live · Google Flights' : source}` : ''}
             </ThemedText>
             {offers.length && asked ? (
-              <View style={{ marginBottom: Spacing.two }}>
+              <View style={{ marginBottom: Spacing.three }}>
                 <TrendBlock origin={ORIGIN} destination={asked.dest} departDate={asked.depart} returnDate={asked.ret} refreshKey={asked.n}
                   price={Math.min(...offers.map((o) => Number(o.price?.total) || Infinity).filter((n) => isFinite(n))) || null} />
               </View>
             ) : null}
             {offers.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">No Delta offers for those dates. Try different dates.</ThemedText>
+              <View style={[styles.note, styles.emptyNote, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.textSecondary }]}>
+                <ThemedText type="small" themeColor="textSecondary">No Delta offers for those dates. Try different dates.</ThemedText>
+              </View>
             ) : (
-              offers.map((o, i) => <OfferCard key={i} offer={o} dest={destination.trim().toUpperCase()} />)
+              <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+                {offers.map((o, i) => <OfferCard key={i} offer={o} dest={destination.trim().toUpperCase()} first={i === 0} />)}
+              </View>
             )}
           </View>
         ) : null}
@@ -199,21 +206,20 @@ export default function SearchScreen() {
   );
 }
 
-function OfferCard({ offer, dest }: { offer: Offer; dest: string }) {
+function OfferCard({ offer, dest, first }: { offer: Offer; dest: string; first?: boolean }) {
   const theme = useTheme();
   const status = offer.companion?.status ?? 'unknown';
   const edge = status === 'eligible' ? theme.good : status === 'ineligible' ? theme.bad : theme.warn;
   const tag = status === 'eligible' ? 'Companion flies free ✓' : status === 'unknown' ? 'Likely — confirm on Delta' : 'Not on this fare';
-  const tagBg = status === 'eligible' ? theme.goodBg : status === 'ineligible' ? theme.badBg : theme.warnBg;
   const v = offer.value ?? {};
   return (
-    <ThemedView type="card" style={[styles.offer, { borderColor: theme.line, borderLeftColor: edge }]}>
+    <View style={[styles.offer, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
       <View style={styles.offerHead}>
-        <ThemedText style={{ fontWeight: '800' }}>
+        <ThemedText style={styles.route}>
           {ORIGIN} → {dest}
           {offer.stops != null ? <ThemedText type="small" themeColor="textSecondary">{'  '}{offer.stops === 0 ? 'nonstop' : `${offer.stops} stop${offer.stops > 1 ? 's' : ''}`}</ThemedText> : null}
         </ThemedText>
-        <View style={[styles.tag, { backgroundColor: tagBg }]}>
+        <View style={[styles.tag, { borderColor: edge }]}>
           <ThemedText style={[styles.tagText, { color: edge }]}>{tag}</ThemedText>
         </View>
       </View>
@@ -222,37 +228,51 @@ function OfferCard({ offer, dest }: { offer: Offer; dest: string }) {
         <Metric k={`Companion pays${v.estimate ? ' (est.)' : ''}`} val={status === 'ineligible' ? '—' : money(v.companionTaxes, v.currency)} />
         <Metric k="You save" val={v.netSavings == null ? '—' : money(v.netSavings, v.currency)} highlight={theme.good} />
       </View>
-    </ThemedView>
+    </View>
   );
 }
 
 function Metric({ k, val, highlight }: { k: string; val: string; highlight?: string }) {
   return (
     <View style={styles.metric}>
-      <ThemedText type="small" themeColor="textSecondary">{k}</ThemedText>
-      <ThemedText style={[styles.metricVal, highlight ? { color: highlight } : null]}>{val}</ThemedText>
+      <ThemedText type="eyebrow" themeColor="textSecondary">{k}</ThemedText>
+      <ThemedText type="money" style={[styles.metricVal, highlight ? { color: highlight } : null]}>{val}</ThemedText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
-  inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.two },
-  title: { fontSize: 24, fontWeight: '800' },
-  banner: { borderWidth: 1, borderRadius: Spacing.three, padding: Spacing.three, marginTop: Spacing.two },
-  field: { gap: Spacing.one, marginTop: Spacing.two },
-  row: { flexDirection: 'row', gap: Spacing.two },
+  inner: { width: '100%', maxWidth: MaxContentWidth },
   flex1: { flex: 1 },
-  input: { borderWidth: 1, borderRadius: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, fontSize: 16 },
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  standfirst: { marginTop: Spacing.three },
+
+  // form
+  field: { gap: Spacing.two, marginTop: Spacing.three },
+  row: { flexDirection: 'row', gap: Spacing.two },
+  input: { minHeight: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two + 2, paddingVertical: Spacing.two + 2, fontSize: 16 },
   toggleRow: { flexDirection: 'row', gap: Spacing.two },
-  toggle: { flex: 1, borderWidth: 1, borderRadius: Spacing.two, paddingVertical: Spacing.two, alignItems: 'center' },
-  cta: { marginTop: Spacing.three, borderRadius: Spacing.three, paddingVertical: Spacing.three, alignItems: 'center' },
-  ctaText: { color: '#ffffff', fontWeight: '800', fontSize: 16 },
-  offer: { borderWidth: 1, borderLeftWidth: 4, borderRadius: Spacing.three, padding: Spacing.three, marginBottom: Spacing.two },
+  toggle: { flex: 1, minHeight: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.two },
+  cta: { minHeight: 48, marginTop: Spacing.four, borderRadius: Radius.sm, paddingVertical: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { color: '#fdfbf5', fontWeight: '700', fontSize: 15.5 },
+
+  // notices
+  note: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, padding: Spacing.three, marginTop: Spacing.three },
+  emptyNote: { marginTop: 0 },
+
+  // results
+  results: { marginTop: Spacing.four },
+  resultsRule: { marginTop: 0 },
+  resultsCount: { marginTop: Spacing.three, marginBottom: Spacing.three },
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+  offer: { padding: Spacing.three },
   offerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
-  tag: { borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 3 },
-  tagText: { fontSize: 11.5, fontWeight: '800' },
-  metrics: { flexDirection: 'row', gap: Spacing.four, marginTop: Spacing.two, flexWrap: 'wrap' },
+  route: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 23, fontWeight: '700' },
+  tag: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two, paddingVertical: 3 },
+  tagText: { fontSize: 10.5, lineHeight: 14, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase' },
+  metrics: { flexDirection: 'row', gap: Spacing.four, marginTop: Spacing.three, flexWrap: 'wrap' },
   metric: { minWidth: 90 },
-  metricVal: { fontSize: 18, fontWeight: '800', marginTop: 2 },
+  metricVal: { marginTop: 2 },
+  pressed: { opacity: 0.75 },
 });

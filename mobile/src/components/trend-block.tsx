@@ -2,12 +2,17 @@
  * TrendBlock — the price verdict for one trip: Buy / Wait / Watch / Learning, the exact reason,
  * a summary line, a bar-strip sparkline (plain Views, no svg dep) and route-wide context.
  * Everything shown comes from GET /api/trend (see lib/trend.ts).
+ *
+ * Set as a quiet bordered block with the verdict carried by a rail down its margin and a tracked
+ * label, not a coloured pill. The sparkline is ink on paper, sitting on a hairline baseline, with
+ * the judged fare — the last bar — struck in the verdict's accent.
  */
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { fetchTrend, judgeAgainstRoute, VERDICT_LABEL, type Trend, type TrendPoint } from '@/lib/trend';
 import { fmt } from '@/lib/trips';
@@ -59,47 +64,49 @@ export function TrendBlock(props: Props) {
   return (
     <ThemedView type="card" style={[styles.block, { borderColor: theme.line, borderLeftColor: accent }]}>
       <View style={styles.top}>
-        <View style={[styles.verdict, { borderColor: accent }]}>
-          <ThemedText style={{ color: accent, fontWeight: '800', fontSize: 13.5, letterSpacing: 0.2 }}>{VERDICT_LABEL[v]}</ThemedText>
-        </View>
-        {t.n >= 2 ? <Spark points={t.points} color={theme.brand} /> : null}
-        {t.n ? <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1, fontSize: 12, fontVariant: ['tabular-nums'] }}>{trend.summary}</ThemedText> : null}
+        <ThemedText type="eyebrow" style={{ color: accent }}>{VERDICT_LABEL[v]}</ThemedText>
+        {t.n >= 2 ? <Spark points={t.points} color={theme.text} accent={accent} baseline={theme.line} /> : null}
+        {t.n ? <ThemedText type="small" themeColor="textSecondary" style={styles.summary}>{trend.summary}</ThemedText> : null}
       </View>
-      <ThemedText type="small" style={{ lineHeight: 19, marginTop: 6 }}>{t.reason}</ThemedText>
+      <View style={[styles.rule, { backgroundColor: theme.line }]} />
+      <ThemedText type="small">{t.reason}</ThemedText>
       {r && r.n >= 5 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 5, lineHeight: 18, fontSize: 12.5 }}>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
           {judged ? which + judged + ' · ' : ''}route low ${r.min} · typical ${r.median} · {r.n} fares recorded
         </ThemedText>
       ) : r && r.n ? (
-        <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 5, fontSize: 12.5 }}>Route history: {r.n} fare{r.n === 1 ? '' : 's'} recorded so far (route verdicts start at 5).</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.note}>Route history: {r.n} fare{r.n === 1 ? '' : 's'} recorded so far (route verdicts start at 5).</ThemedText>
       ) : null}
       {paidLine ? (
-        <ThemedText type="small" style={{ marginTop: 7, lineHeight: 19, color: paidGood ? theme.good : theme.textSecondary, fontWeight: paidGood ? '700' : '400' }}>{paidLine}</ThemedText>
+        <ThemedText type="small" style={[styles.note, { color: paidGood ? theme.good : theme.textSecondary, fontWeight: paidGood ? '700' : '400' }]}>{paidLine}</ThemedText>
       ) : null}
     </ThemedView>
   );
 }
 
 /** Bar-strip sparkline: one thin bar per observation, height normalized to the series range. */
-function Spark({ points, color }: { points: TrendPoint[]; color: string }) {
+function Spark({ points, color, accent, baseline }: { points: TrendPoint[]; color: string; accent: string; baseline: string }) {
   const pts = points.slice(-24);
   const ys = pts.map((p) => p.price);
   const min = Math.min(...ys), max = Math.max(...ys);
   const span = max - min || 1;
   return (
-    <View style={styles.spark} accessible accessibilityLabel={`Price trend, ${pts.length} points, low $${min}, high $${max}`}>
+    <View style={[styles.spark, { borderBottomColor: baseline }]} accessible accessibilityLabel={`Price trend, ${pts.length} points, low $${min}, high $${max}`}>
       {pts.map((p, i) => {
         const h = 4 + Math.round(((p.price - min) / span) * 20);
         const last = i === pts.length - 1;
-        return <View key={p.day + i} style={{ width: 3, height: h, borderRadius: 1, backgroundColor: color, opacity: last ? 1 : 0.55 }} />;
+        return <View key={p.day + i} style={{ width: 3, height: h, backgroundColor: last ? accent : color, opacity: last ? 1 : 0.32 }} />;
       })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  block: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 8, padding: 10, marginTop: 8 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  verdict: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
-  spark: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 24 },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, borderRadius: Radius.sm, paddingVertical: Spacing.three, paddingRight: Spacing.three, paddingLeft: Spacing.three - 3, marginTop: Spacing.two },
+  top: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two + 2, flexWrap: 'wrap' },
+  summary: { flex: 1, minWidth: 150, fontVariant: ['tabular-nums'] },
+  rule: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.two + 2 },
+  note: { marginTop: Spacing.two },
+  // Ink bars standing on a hairline baseline — a chart axis, not a widget.
+  spark: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 24, borderBottomWidth: StyleSheet.hairlineWidth },
 });

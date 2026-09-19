@@ -2,11 +2,15 @@
  * Airline scorecard — the U.S. DOT Air Travel Consumer Report figures, one row per airline,
  * sorted by complaints per 100,000 passengers (worst first). Same period, same metric, same
  * source for everyone; nulls render as "—", never as a guess. Data: src/data/scorecard.ts (generated).
+ *
+ * Set like a printed table (constants/theme.ts): hairline rules, a recessed header of small-caps
+ * labels, names in the serif, figures in tabular numerals, and a ruled industry line at the foot.
+ * The only colour is the verdict against that line — green better, oxblood worse.
  */
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { SCORECARD, SCORECARD_REPORT, type ScorecardAirline } from '@/data/scorecard';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -35,23 +39,25 @@ export function Scorecard() {
   const r = SCORECARD_REPORT;
   const anyMerged = rows.some((a) => a.notes && /combined|merged|reported with/i.test(a.notes));
   return (
-    <View style={{ marginBottom: 12 }}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: 8, lineHeight: 19 }}>
+    <View style={{ marginBottom: Spacing.three }}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.lede}>
         Straight from the U.S. DOT Air Travel Consumer Report{r?.period ? ` — ${r.period}` : ''}. Sorted by complaints per 100,000 passengers, worst first. Green beats the industry line; red is worse.
       </ThemedText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <ThemedView type="card" style={[styles.table, { borderColor: theme.line }]}>
-          <View style={[styles.row, styles.head, { borderBottomColor: theme.line }]}>
-            <ThemedText style={[styles.name, styles.th, { color: theme.textSecondary }]}>AIRLINE</ThemedText>
+        <View style={[styles.table, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <View style={[styles.row, styles.head, { backgroundColor: theme.backgroundElement, borderBottomColor: theme.line }]}>
+            <ThemedText type="eyebrow" themeColor="textSecondary" style={styles.headName}>AIRLINE</ThemedText>
             {COLS.map((c) => (
               <View key={String(c.key)} style={styles.cell}>
-                <ThemedText style={[styles.th, { color: theme.textSecondary }]}>{c.label.toUpperCase()}</ThemedText>
+                <ThemedText type="eyebrow" themeColor="textSecondary">{c.label.toUpperCase()}</ThemedText>
                 {c.sub ? <ThemedText style={[styles.sub, { color: theme.textSecondary }]}>{c.sub}</ThemedText> : null}
               </View>
             ))}
           </View>
-          {sorted.map((a) => (
-            <View key={a.iata || a.name || ''} style={[styles.row, { borderBottomColor: theme.line }]}>
+          {sorted.map((a, i) => (
+            <View
+              key={a.iata || a.name || ''}
+              style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
               <ThemedText style={styles.name} numberOfLines={1}>{a.name}{a.notes && /combined|merged|reported with/i.test(a.notes) ? ' †' : ''}</ThemedText>
               {COLS.map((c) => {
                 const v = a[c.key] as number | null;
@@ -59,18 +65,22 @@ export function Scorecard() {
               })}
             </View>
           ))}
-          <View style={[styles.row, { borderTopWidth: 1, borderTopColor: theme.text }]}>
-            <ThemedText style={[styles.name, { color: theme.textSecondary, fontStyle: 'italic' }]} numberOfLines={1}>All airlines</ThemedText>
+          {/* The industry line the colours are measured against — ruled off, like a total. */}
+          <View style={[styles.row, styles.foot, { borderTopColor: theme.line, backgroundColor: theme.backgroundElement }]}>
+            <ThemedText style={[styles.name, styles.footText, { color: theme.textSecondary }]} numberOfLines={1}>All airlines</ThemedText>
             {COLS.map((c) => (
-              <ThemedText key={String(c.key)} style={[styles.cell, styles.num, { color: theme.textSecondary, fontStyle: 'italic' }]}>{fmt(c.avg, c.pct)}</ThemedText>
+              <ThemedText key={String(c.key)} style={[styles.cell, styles.num, styles.footText, { color: theme.textSecondary }]}>{fmt(c.avg, c.pct)}</ThemedText>
             ))}
           </View>
-        </ThemedView>
+        </View>
       </ScrollView>
-      <View style={{ marginTop: 6, gap: 2 }}>
+      <View style={styles.notes}>
         {anyMerged ? <ThemedText type="small" themeColor="textSecondary">† reported combined with a merger partner.</ThemedText> : null}
         {r?.url ? (
-          <Pressable onPress={() => Linking.openURL(r.url!)} hitSlop={6}>
+          <Pressable
+            onPress={() => Linking.openURL(r.url!)}
+            hitSlop={6}
+            style={({ pressed }) => [styles.linkTap, pressed ? styles.pressed : null]}>
             <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>Read the report →{r.publishedDate ? `  (published ${r.publishedDate})` : ''}</ThemedText>
           </Pressable>
         ) : null}
@@ -80,12 +90,18 @@ export function Scorecard() {
 }
 
 const styles = StyleSheet.create({
-  table: { borderWidth: 1, borderRadius: 8, overflow: 'hidden', minWidth: 560 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 1 },
-  head: { paddingVertical: 6 },
-  name: { width: 150, fontWeight: '700', fontSize: 14 },
-  th: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.4 },
-  sub: { fontSize: 10 },
+  lede: { marginBottom: Spacing.two },
+  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden', minWidth: 560 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.two + 2, paddingHorizontal: Spacing.three - 4 },
+  head: { paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth },
+  headName: { width: 150 },
+  foot: { borderTopWidth: 1.5 },
+  footText: { fontStyle: 'italic' },
+  name: { width: 150, paddingRight: Spacing.two, fontFamily: Fonts.serif, fontSize: 14.5, lineHeight: 20, fontWeight: '700' },
+  sub: { fontSize: 10.5, lineHeight: 14 },
   cell: { width: 80, alignItems: 'flex-end' },
-  num: { textAlign: 'right', fontVariant: ['tabular-nums'], fontSize: 13.5 },
+  num: { textAlign: 'right', fontVariant: ['tabular-nums'], fontSize: 13.5, lineHeight: 20, fontWeight: '600' },
+  notes: { marginTop: Spacing.two, gap: Spacing.half },
+  linkTap: { minHeight: 44, justifyContent: 'center' },
+  pressed: { opacity: 0.75 },
 });

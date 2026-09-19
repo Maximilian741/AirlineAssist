@@ -7,8 +7,7 @@ import { BuyCheckSection } from '@/components/buy-check';
 import { FareClassDecoder } from '@/components/fare-class-decoder';
 import { ScheduleLever } from '@/components/schedule-lever';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, Fonts, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
 import { CARD_PROTECTIONS, FEES, MOVES, feeNum, type CardProtection, type Fee, type Move, type MoneySource } from '@/data/money';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -23,40 +22,54 @@ export default function MovesScreen() {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[styles.content, { paddingTop: insets.top + TopTabInset + Spacing.three, paddingBottom: insets.bottom + BottomTabInset + Spacing.four }]}>
       <View style={styles.inner}>
-        <View style={styles.hero}>
-          <ThemedText style={styles.heroEmoji}>💰</ThemedText>
-          <ThemedText style={styles.heroTitle}>The stuff airlines don’t advertise</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" style={styles.heroText}>
-            Real ways to pay less and claw money back — the exact steps, the dollar amount, and the honest catch.
-          </ThemedText>
-        </View>
+        <ThemedText type="display">The stuff airlines don’t advertise</ThemedText>
+        <View style={[styles.rule, { backgroundColor: theme.line }]} />
+        <ThemedText type="lede" themeColor="textSecondary" style={styles.lede}>
+          Real ways to pay less and claw money back — the exact steps, the dollar amount, and the honest catch.
+        </ThemedText>
 
         <BuyCheckSection theme={theme} />
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🔁 When they move your flight</ThemedText>
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">When they move your flight</ThemedText>
+        </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>A schedule change you didn’t ask for can be worth a free rebooking — or your money back, even on a nonrefundable ticket.</ThemedText>
         <ScheduleLever />
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🃏 The playbook</ThemedText>
-        {MOVES.map((m) => (
-          <MoveCard key={m.id} m={m} theme={theme} />
-        ))}
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">The playbook</ThemedText>
+        </View>
+        <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          {MOVES.map((m, i) => (
+            <MoveCard key={m.id} m={m} theme={theme} first={i === 0} />
+          ))}
+        </View>
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🧮 True price calculator</ThemedText>
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">True price calculator</ThemedText>
+        </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>The “cheap” fare usually isn’t. See what it really costs once you add what you need.</ThemedText>
         <TruePrice theme={theme} />
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🧾 The fees they bury</ThemedText>
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">The fees they bury</ThemedText>
+        </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>The upfront fee-disclosure rule got struck down in 2026, so airlines don’t have to show these while you shop.</ThemedText>
-        {FEES.map((f) => (
-          <FeeCard key={f.iata} f={f} theme={theme} />
-        ))}
+        <View style={[styles.sheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          {FEES.map((f, i) => (
+            <FeeCard key={f.iata} f={f} theme={theme} first={i === 0} />
+          ))}
+        </View>
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">🎟️ Decode the letter on your ticket</ThemedText>
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">Decode the letter on your ticket</ThemedText>
+        </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>One letter decides whether your companion certificate works.</ThemedText>
         <FareClassDecoder />
 
-        <ThemedText style={[styles.h, { marginTop: Spacing.five }]} themeColor="brandDeep">💳 Money you already have</ThemedText>
+        <View style={[styles.sectionHead, { borderTopColor: theme.line }]}>
+          <ThemedText type="section">Money you already have</ThemedText>
+        </View>
         <ThemedText type="small" themeColor="textSecondary" style={styles.sub}>Most people never claim the trip insurance built into their credit card. Check yours.</ThemedText>
         <CardChecker theme={theme} />
       </View>
@@ -69,42 +82,46 @@ type Theme = ReturnType<typeof useTheme>;
 function Sources({ sources, theme }: { sources?: MoneySource[]; theme: Theme }) {
   if (!sources || !sources.length) return null;
   return (
-    <View style={styles.sourcesRow}>
-      <ThemedText type="small" themeColor="textSecondary">Sources: </ThemedText>
-      {sources.map((s, i) => (
-        <Pressable key={i} onPress={() => openBrowserAsync(s.url).catch(() => {})} hitSlop={8} style={{ minHeight: 32, justifyContent: 'center' }}>
-          <ThemedText type="small" style={{ color: theme.brand, textDecorationLine: 'underline' }}>{s.label}{i < sources.length - 1 ? '   ' : ''}</ThemedText>
-        </Pressable>
-      ))}
+    <View style={styles.sources}>
+      <ThemedText type="eyebrow" style={{ color: theme.textSecondary }}>Sources: </ThemedText>
+      <View style={styles.sourcesRow}>
+        {sources.map((s, i) => (
+          <Pressable key={i} onPress={() => openBrowserAsync(s.url).catch(() => {})} hitSlop={8} style={styles.sourceTap}>
+            <ThemedText type="small" style={{ color: theme.brand, textDecorationLine: 'underline' }}>{s.label}{i < sources.length - 1 ? '   ' : ''}</ThemedText>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
 
-function MoveCard({ m, theme }: { m: Move; theme: Theme }) {
+function MoveCard({ m, theme, first }: { m: Move; theme: Theme; first?: boolean }) {
   const [open, setOpen] = useState(false);
   const risk = m.riskLevel || 'low';
   const edge = risk === 'high' ? theme.bad : risk === 'medium' ? theme.warn : theme.good;
   const riskBg = risk === 'high' ? theme.badBg : risk === 'medium' ? theme.warnBg : theme.goodBg;
   const riskLabel = risk === 'high' ? 'High risk' : risk === 'medium' ? 'Some risk' : 'Low risk';
   return (
-    <ThemedView type="card" style={[styles.card, { borderColor: theme.line, borderLeftColor: edge }]}>
-      <View style={styles.cardHead}>
-        <ThemedText style={styles.cardTitle}>{m.title}</ThemedText>
-        <View style={[styles.pill, { backgroundColor: riskBg }]}><ThemedText style={[styles.pillText, { color: edge }]}>{riskLabel}</ThemedText></View>
+    <View style={[styles.move, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+      <View style={styles.moveHead}>
+        <ThemedText style={styles.moveTitle}>{m.title}</ThemedText>
+        <View style={[styles.badge, { backgroundColor: riskBg, borderColor: edge }]}>
+          <ThemedText type="eyebrow" style={{ color: edge }}>{riskLabel}</ThemedText>
+        </View>
       </View>
-      <ThemedText type="small" style={{ marginTop: 6, fontWeight: '700' }}>
-        💵 {m.tldr}{m.saves ? <ThemedText type="small" style={{ color: theme.good, fontWeight: '800' }}>{'  ' + m.saves}</ThemedText> : null}
+      <ThemedText type="smallBold" style={styles.tldr}>
+        {m.tldr}{m.saves ? <ThemedText style={[styles.saves, { color: theme.good }]}>{'  ' + m.saves}</ThemedText> : null}
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6, lineHeight: 20 }}>{m.whatItIs}</ThemedText>
-      <Pressable onPress={() => setOpen((v) => !v)} hitSlop={10} style={{ minHeight: 44, justifyContent: 'center' }}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.moveBody}>{m.whatItIs}</ThemedText>
+      <Pressable onPress={() => setOpen((v) => !v)} hitSlop={10} style={styles.disclose}>
         <ThemedText type="small" style={{ color: theme.brand, fontWeight: '700' }}>{open ? '▾ ' : '▸ '}Exact steps & the catch</ThemedText>
       </Pressable>
       {open ? (
         <View style={[styles.detail, { borderTopColor: theme.line }]}>
           {m.steps && m.steps.length ? (
-            <View style={{ marginBottom: Spacing.two }}>
+            <View style={styles.steps}>
               {m.steps.map((s, i) => (
-                <ThemedText key={i} type="small" style={{ marginBottom: 4, lineHeight: 20 }}>{i + 1}. {s}</ThemedText>
+                <ThemedText key={i} type="small" style={styles.step}>{i + 1}. {s}</ThemedText>
               ))}
             </View>
           ) : null}
@@ -113,15 +130,15 @@ function MoveCard({ m, theme }: { m: Move; theme: Theme }) {
           <Sources sources={m.sources} theme={theme} />
         </View>
       ) : null}
-    </ThemedView>
+    </View>
   );
 }
 
 function Row({ k, v, theme }: { k: string; v: string; theme: Theme }) {
   return (
-    <View style={{ marginBottom: Spacing.two }}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontWeight: '800', fontSize: 12 }}>{k.toUpperCase()}</ThemedText>
-      <ThemedText type="small" style={{ lineHeight: 20 }}>{v}</ThemedText>
+    <View style={styles.kv}>
+      <ThemedText type="eyebrow" style={{ color: theme.textSecondary }}>{k.toUpperCase()}</ThemedText>
+      <ThemedText type="small" style={styles.kvText}>{v}</ThemedText>
     </View>
   );
 }
@@ -129,10 +146,10 @@ function Row({ k, v, theme }: { k: string; v: string; theme: Theme }) {
 function Toggle({ on, label, onPress, theme }: { on: boolean; label: string; onPress: () => void; theme: Theme }) {
   return (
     <Pressable onPress={onPress} style={styles.toggleRow} hitSlop={6}>
-      <View style={[styles.box, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.brand : 'transparent' }]}>
-        {on ? <ThemedText style={{ color: '#fff', fontSize: 13, fontWeight: '900', lineHeight: 16 }}>✓</ThemedText> : null}
+      <View style={[styles.box, { borderColor: on ? theme.brandDeep : theme.line, backgroundColor: on ? theme.brandDeep : 'transparent' }]}>
+        {on ? <ThemedText style={styles.boxMark}>✓</ThemedText> : null}
       </View>
-      <ThemedText type="small" style={{ fontWeight: '600' }}>{label}</ThemedText>
+      <ThemedText type="small" style={{ color: on ? theme.text : theme.textSecondary }}>{label}</ThemedText>
     </Pressable>
   );
 }
@@ -163,24 +180,35 @@ function TruePrice({ theme }: { theme: Theme }) {
   }
 
   return (
-    <ThemedView type="backgroundElement" style={[styles.tool, { borderColor: theme.brand }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+    <View style={[styles.tool, { backgroundColor: theme.backgroundElement, borderColor: theme.line }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipTray}>
         {FEES.map((x, i) => (
-          <Pressable key={x.iata} onPress={() => setIdx(i)} style={[styles.chip, { borderColor: idx === i ? theme.brand : theme.line, backgroundColor: idx === i ? theme.backgroundSelected : theme.card }]}>
-            <ThemedText type="small" style={{ fontWeight: '700', color: idx === i ? theme.brandDeep : theme.textSecondary }}>{x.airline.replace(/\s+(Air Lines|Airlines|Air)$/, '')}</ThemedText>
+          <Pressable
+            key={x.iata}
+            onPress={() => setIdx(i)}
+            style={({ pressed }) => [styles.chip, { borderColor: idx === i ? theme.brandDeep : theme.line, backgroundColor: idx === i ? theme.backgroundSelected : 'transparent' }, pressed && styles.pressed]}>
+            <ThemedText type="small" style={{ fontWeight: idx === i ? '700' : '400', color: idx === i ? theme.text : theme.textSecondary }}>{x.airline.replace(/\s+(Air Lines|Airlines|Air)$/, '')}</ThemedText>
           </Pressable>
         ))}
       </ScrollView>
       <View style={styles.fareRow}>
-        <ThemedText style={{ fontSize: 20, fontWeight: '800' }}>$</ThemedText>
+        <ThemedText type="money" style={{ color: theme.textSecondary }}>$</ThemedText>
         <TextInput value={fare} onChangeText={setFare} keyboardType="numeric" placeholder="Fare you see (e.g. 129)" placeholderTextColor={theme.textSecondary} style={[styles.input, { backgroundColor: theme.card, borderColor: theme.line, color: theme.text, flex: 1 }]} />
       </View>
-      <View style={styles.typeRow}>
-        {(['basic', 'main'] as const).map((t) => {
+      <View style={[styles.segment, { borderColor: theme.line }]}>
+        {(['basic', 'main'] as const).map((t, i) => {
           const on = (t === 'basic') === basic;
           return (
-            <Pressable key={t} onPress={() => setBasic(t === 'basic')} style={[styles.typeBtn, { borderColor: on ? theme.brand : theme.line, backgroundColor: on ? theme.backgroundSelected : theme.card }]}>
-              <ThemedText type="small" style={{ fontWeight: '700', color: on ? theme.brandDeep : theme.textSecondary }}>{t === 'basic' ? 'Basic economy' : 'Main / regular'}</ThemedText>
+            <Pressable
+              key={t}
+              onPress={() => setBasic(t === 'basic')}
+              style={({ pressed }) => [
+                styles.segmentBtn,
+                i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: theme.line },
+                on && { backgroundColor: theme.backgroundSelected },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="small" style={{ fontWeight: on ? '700' : '400', color: on ? theme.text : theme.textSecondary }}>{t === 'basic' ? 'Basic economy' : 'Main / regular'}</ThemedText>
             </Pressable>
           );
         })}
@@ -191,41 +219,43 @@ function TruePrice({ theme }: { theme: Theme }) {
         <Toggle on={seat} label="Pick my seat" onPress={() => setSeat((v) => !v)} theme={theme} />
         <Toggle on={change} label="Might change it" onPress={() => setChange((v) => !v)} theme={theme} />
       </View>
-      <ThemedText style={{ fontSize: 17, fontWeight: '700', marginTop: Spacing.three }}>
-        {fareN ? 'That ' + money(fareN) + ' fare can run up to ' : 'Real total: up to '}
-        <ThemedText style={{ color: theme.good, fontSize: 20, fontWeight: '900' }}>{money(total)}</ThemedText>
-        {add > 0 ? <ThemedText style={{ fontSize: 17, fontWeight: '700' }}> — {money(add)} in add-ons they don’t show you upfront.</ThemedText> : null}
-      </ThemedText>
-      {lines.map((l, i) => (
-        <ThemedText key={i} type="small" themeColor="textSecondary" style={{ marginTop: 2 }}>• {l[0]}: +{money(l[1])}</ThemedText>
-      ))}
+      <View style={[styles.totalBlock, { borderTopColor: theme.line }]}>
+        <ThemedText type="lede">
+          {fareN ? 'That ' + money(fareN) + ' fare can run up to ' : 'Real total: up to '}
+          <ThemedText type="money" style={[styles.totalMoney, { color: add > 0 ? theme.bad : theme.text }]}>{money(total)}</ThemedText>
+          {add > 0 ? <ThemedText type="lede"> — {money(add)} in add-ons they don’t show you upfront.</ThemedText> : null}
+        </ThemedText>
+        {lines.map((l, i) => (
+          <ThemedText key={i} type="small" themeColor="textSecondary" style={styles.breakdown}>· {l[0]}: +{money(l[1])}</ThemedText>
+        ))}
+      </View>
       {warns.length ? (
-        <ThemedView type="card" style={[styles.warn, { borderColor: theme.warn }]}>
-          {warns.map((w, i) => <ThemedText key={i} type="small" style={{ lineHeight: 19 }}>⚠ {w}</ThemedText>)}
-        </ThemedView>
+        <View style={[styles.note, { backgroundColor: theme.card, borderColor: theme.line, borderLeftColor: theme.warn }]}>
+          {warns.map((w, i) => <ThemedText key={i} type="small" style={styles.noteText}>{w}</ThemedText>)}
+        </View>
       ) : null}
-    </ThemedView>
+    </View>
   );
 }
 
-function FeeCard({ f, theme }: { f: Fee; theme: Theme }) {
+function FeeCard({ f, theme, first }: { f: Fee; theme: Theme; first?: boolean }) {
   const cell = (k: string, v?: string) => (
     <View style={styles.feeCell}>
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 11, fontWeight: '800' }}>{k}</ThemedText>
-      <ThemedText type="small" style={{ fontWeight: '700' }}>{v || '—'}</ThemedText>
+      <ThemedText type="eyebrow" style={{ color: theme.textSecondary }}>{k}</ThemedText>
+      <ThemedText type="small" style={styles.feeValue}>{v || '—'}</ThemedText>
     </View>
   );
   return (
-    <ThemedView type="card" style={[styles.card, { borderColor: theme.line }]}>
-      <ThemedText style={{ fontWeight: '800', fontSize: 15, marginBottom: 6 }}>{f.airline}</ThemedText>
+    <View style={[styles.feeRow, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.line }]}>
+      <ThemedText style={styles.feeAirline}>{f.airline}</ThemedText>
       <View style={styles.feeGrid}>
         {cell('1st bag', f.checkedBag1)}
         {cell('Carry-on', f.carryOn)}
         {cell('Seat', f.seat)}
         {cell('Change', f.changeFee)}
       </View>
-      {f.basicEconomy ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>Basic strips: {f.basicEconomy}</ThemedText> : null}
-    </ThemedView>
+      {f.basicEconomy ? <ThemedText type="small" themeColor="textSecondary" style={styles.feeBasic}>Basic strips: {f.basicEconomy}</ThemedText> : null}
+    </View>
   );
 }
 
@@ -235,31 +265,36 @@ function CardChecker({ theme }: { theme: Theme }) {
   const cell = (k: string, v?: string) =>
     v ? (
       <View style={styles.feeCell}>
-        <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 11, fontWeight: '800' }}>{k}</ThemedText>
-        <ThemedText type="small" style={{ fontWeight: '700' }}>{v}</ThemedText>
+        <ThemedText type="eyebrow" style={{ color: theme.textSecondary }}>{k}</ThemedText>
+        <ThemedText type="small" style={styles.feeValue}>{v}</ThemedText>
       </View>
     ) : null;
   return (
     <View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipTray}>
         {CARD_PROTECTIONS.map((x, i) => (
-          <Pressable key={x.card} onPress={() => setIdx(i)} style={[styles.chip, { borderColor: idx === i ? theme.brand : theme.line, backgroundColor: idx === i ? theme.backgroundSelected : theme.card }]}>
-            <ThemedText type="small" style={{ fontWeight: '700', color: idx === i ? theme.brandDeep : theme.textSecondary }}>{x.card}</ThemedText>
+          <Pressable
+            key={x.card}
+            onPress={() => setIdx(i)}
+            style={({ pressed }) => [styles.chip, { borderColor: idx === i ? theme.brandDeep : theme.line, backgroundColor: idx === i ? theme.backgroundSelected : 'transparent' }, pressed && styles.pressed]}>
+            <ThemedText type="small" style={{ fontWeight: idx === i ? '700' : '400', color: idx === i ? theme.text : theme.textSecondary }}>{x.card}</ThemedText>
           </Pressable>
         ))}
       </ScrollView>
       {c ? (
-        <ThemedView type="card" style={[styles.card, { borderColor: theme.line, marginTop: Spacing.two }]}>
+        <View style={[styles.detailSheet, { backgroundColor: theme.card, borderColor: theme.line }]}>
           <View style={styles.feeGrid}>
             {cell('Flight delay', c.tripDelay)}
             {cell('Trip cancel', c.tripCancellation)}
             {cell('Bag delayed', c.baggageDelay)}
             {cell('Bag lost', c.baggageLoss)}
           </View>
-          {c.howToClaim ? <ThemedText type="small" style={{ marginTop: 8 }}><ThemedText type="smallBold">How to claim: </ThemedText>{c.howToClaim}</ThemedText> : null}
-          <ThemedView type="card" style={[styles.warn, { borderColor: theme.warn }]}><ThemedText type="small">⚠ The catch: {c.catch || 'You must pay for the trip with this card.'}</ThemedText></ThemedView>
+          {c.howToClaim ? <ThemedText type="small" style={styles.claimLine}><ThemedText type="smallBold">How to claim: </ThemedText>{c.howToClaim}</ThemedText> : null}
+          <View style={[styles.note, { backgroundColor: theme.backgroundElement, borderColor: theme.line, borderLeftColor: theme.warn }]}>
+            <ThemedText type="small" style={styles.noteText}>The catch: {c.catch || 'You must pay for the trip with this card.'}</ThemedText>
+          </View>
           <Sources sources={c.sources} theme={theme} />
-        </ThemedView>
+        </View>
       ) : null}
     </View>
   );
@@ -268,29 +303,65 @@ function CardChecker({ theme }: { theme: Theme }) {
 const styles = StyleSheet.create({
   content: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth },
-  hero: { alignItems: 'center', paddingVertical: Spacing.three, gap: 4 },
-  heroEmoji: { fontSize: 40 },
-  heroTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  heroText: { textAlign: 'center', maxWidth: 520, marginTop: 4 },
-  h: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+
+  // ---- editorial rhythm: rule, serif heading, deck, content ----
+  rule: { height: StyleSheet.hairlineWidth, marginTop: Spacing.three },
+  lede: { marginTop: Spacing.three },
+  sectionHead: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.three, marginTop: Spacing.five, marginBottom: Spacing.one },
   sub: { marginBottom: Spacing.three, lineHeight: 20 },
-  card: { borderWidth: 1, borderLeftWidth: 5, borderRadius: 13, padding: 14, marginBottom: 11 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  cardTitle: { fontWeight: '800', fontSize: 16, flexShrink: 1 },
-  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 11, fontWeight: '800' },
-  detail: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  sourcesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4 },
-  tool: { borderWidth: 1.5, borderRadius: 14, padding: 14 },
-  fareRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: Spacing.three },
-  input: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
-  typeRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.two },
-  typeBtn: { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  checks: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: Spacing.three },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 32 },
-  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  warn: { borderWidth: 1, borderRadius: 10, padding: 11, marginTop: 10, gap: 3 },
-  chip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  feeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+
+  // ---- one sheet, hairline-separated rows ----
+  sheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, overflow: 'hidden' },
+
+  // ---- the playbook ----
+  move: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  moveHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Spacing.two },
+  moveTitle: { fontFamily: Fonts.serif, fontSize: 17, lineHeight: 23, fontWeight: '700', flexShrink: 1 },
+  badge: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.one + 2, paddingVertical: 2 },
+  tldr: { marginTop: Spacing.two - 2 },
+  saves: { fontSize: 14, lineHeight: 21, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  moveBody: { marginTop: Spacing.two - 2, lineHeight: 20 },
+  disclose: { minHeight: 44, justifyContent: 'center' },
+  detail: { marginTop: Spacing.two, paddingTop: Spacing.two, borderTopWidth: StyleSheet.hairlineWidth },
+  steps: { marginBottom: Spacing.two },
+  step: { marginBottom: Spacing.one, lineHeight: 20 },
+  kv: { marginBottom: Spacing.two },
+  kvText: { lineHeight: 20, marginTop: 1 },
+
+  // ---- sources ----
+  sources: { marginTop: Spacing.two },
+  sourcesRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  sourceTap: { minHeight: 32, justifyContent: 'center' },
+
+  // ---- true price calculator ----
+  tool: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, padding: Spacing.three },
+  chipTray: { gap: Spacing.two, paddingVertical: Spacing.half },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.three, minHeight: 44, justifyContent: 'center' },
+  fareRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, paddingHorizontal: Spacing.two + 2, paddingVertical: Spacing.two + 2, minHeight: 44, fontSize: 16 },
+  segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.sm, overflow: 'hidden', marginTop: Spacing.two },
+  segmentBtn: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.two },
+  checks: { flexDirection: 'row', flexWrap: 'wrap', columnGap: Spacing.four, rowGap: Spacing.half, marginTop: Spacing.two },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 44 },
+  box: { width: 20, height: 20, borderRadius: Radius.sm, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  boxMark: { color: '#fdfbf5', fontSize: 12, fontWeight: '700', lineHeight: 16 },
+  totalBlock: { marginTop: Spacing.three, paddingTop: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
+  totalMoney: { fontSize: 21, lineHeight: 26 },
+  breakdown: { marginTop: Spacing.half, fontVariant: ['tabular-nums'] },
+  note: { borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 2, borderRadius: Radius.sm, padding: Spacing.two + 2, marginTop: Spacing.two, gap: Spacing.one },
+  noteText: { lineHeight: 20 },
+
+  // ---- the fee table ----
+  feeRow: { paddingVertical: Spacing.three, paddingHorizontal: Spacing.three },
+  feeAirline: { fontFamily: Fonts.serif, fontSize: 16, lineHeight: 22, fontWeight: '700', marginBottom: Spacing.two },
+  feeGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: Spacing.two, columnGap: Spacing.two },
   feeCell: { width: '47%', flexGrow: 1, backgroundColor: 'transparent' },
+  feeValue: { fontWeight: '700', fontVariant: ['tabular-nums'], marginTop: 1 },
+  feeBasic: { marginTop: Spacing.two },
+
+  // ---- card protections ----
+  detailSheet: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, padding: Spacing.three, marginTop: Spacing.two },
+  claimLine: { marginTop: Spacing.two, lineHeight: 20 },
+
+  pressed: { opacity: 0.75 },
 });

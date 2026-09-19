@@ -60,7 +60,8 @@ window.Viral = (function () {
       headline: phrase ? `${al} owes me ${phrase}.` : `${al} owes me — here’s the rule.`,
       sub: e.condition ? `Conditions apply: ${e.condition}.` : 'Most people never ask for it.',
       panelLabel: 'THEY OWE ME',
-      big: (amount || named || (pct ? `${pct[1]}% of my fare` : '') || 'see the rule').toUpperCase(),
+      // Set as written: the small-caps label above it is the shout, the figure itself is just set well.
+      big: amount || named || (pct ? `${pct[1]}% of my fare` : '') || 'See the rule',
       rule,
     };
   }
@@ -125,7 +126,16 @@ window.Viral = (function () {
     return `${hook}\n\nMost people never check what they're owed — took me about 2 minutes.\n\n${tags}`;
   }
 
-  // ---- canvas card (1080x1920, TikTok/Reels vertical) ----
+  // ---- the card, drawn the way the app is set: warm paper, ink, one accent, hairlines, no shadows ----
+  const INK = '#1c2733';
+  const PAPER = '#f7f4ee';
+  const MUTED = '#5c6670';
+  const RULE = '#cfc7b6';
+  const NAVY = '#16324a';
+  const OXBLOOD = '#b03a2e';
+  const SERIF = 'Georgia, "Iowan Old Style", "Times New Roman", serif';
+  const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -154,76 +164,125 @@ window.Viral = (function () {
     }
     return y;
   }
-
-  function renderCard(res, a, d) {
-    const c = cardCopy(res, a, d);
-    if (!c) return null;
+  /** Wrap, but never past `maxLines` — the last line gets an ellipsis. Returns the y after the block. */
+  function wrapClamp(ctx, text, x, y, maxW, lh, maxLines) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const t = line ? line + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else { line = t; }
+    }
+    if (line) lines.push(line);
+    const shown = lines.slice(0, maxLines);
+    if (lines.length > maxLines && shown.length) {
+      let last = shown[shown.length - 1];
+      while (last && ctx.measureText(last + ' …').width > maxW) last = last.replace(/\s*\S+$/, '');
+      shown[shown.length - 1] = last + ' …';
+    }
+    shown.forEach((l, i) => ctx.fillText(l, x, y + i * lh));
+    return y + shown.length * lh;
+  }
+  /** Small-caps label with real letter-spacing (canvas has none), drawn a character at a time. */
+  function tracked(ctx, text, x, y, spacing) {
+    let cx = x;
+    for (const ch of String(text)) {
+      ctx.fillText(ch, cx, y);
+      cx += ctx.measureText(ch).width + spacing;
+    }
+    return cx;
+  }
+  function hairline(ctx, x1, y, x2, dashed) {
+    ctx.strokeStyle = RULE;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(dashed ? [10, 12] : []);
+    ctx.beginPath();
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x2, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  /** The masthead every card carries: the monogram tile and the wordmark, as on the site. */
+  function masthead(ctx, pad, y) {
+    ctx.fillStyle = NAVY;
+    roundRect(ctx, pad, y, 84, 84, 6);
+    ctx.fill();
+    ctx.fillStyle = '#fdfbf5';
+    ctx.font = `italic 700 52px ${SERIF}`;
+    ctx.fillText('F', pad + 27, y + 60);
+    ctx.fillStyle = INK;
+    ctx.font = `700 54px ${SERIF}`;
+    ctx.fillText('Fairfare', pad + 108, y + 60);
+    return y + 84;
+  }
+  function newCard() {
     const W = 1080, H = 1920;
     const cv = document.createElement('canvas');
     cv.width = W;
     cv.height = H;
     const ctx = cv.getContext('2d');
-
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, '#0c1626');
-    g.addColorStop(1, '#15243f');
-    ctx.fillStyle = g;
+    ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(0, 0, W, 18);
-
-    const pad = 96;
+    ctx.fillStyle = NAVY; // the spine: one deliberate mark of colour
+    ctx.fillRect(0, 0, 10, H);
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 44px system-ui, Segoe UI, Roboto, sans-serif';
-    ctx.fillText('WHAT MOST FLYERS NEVER CLAIM', pad, 190);
+    return { cv, ctx, W, H };
+  }
+  /** The closing block: rule, the question, and where to answer it. */
+  function cardFooter(ctx, W, H, pad) {
+    hairline(ctx, pad, H - 300, W - pad);
+    ctx.fillStyle = INK;
+    ctx.font = `700 58px ${SERIF}`;
+    ctx.fillText('What does your airline owe you?', pad, H - 220);
+    ctx.fillStyle = OXBLOOD;
+    ctx.font = `700 40px ${SANS}`;
+    ctx.fillText('Check yours free  →', pad, H - 152);
+    ctx.fillStyle = MUTED;
+    ctx.font = `600 34px ${SANS}`;
+    ctx.fillText('Fairfare · know your rights, get paid', pad, H - 90);
+  }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 86px system-ui, Segoe UI, Roboto, sans-serif';
-    let y = wrapText(ctx, c.headline.toUpperCase(), pad, 320, W - 2 * pad, 100);
+  function renderCard(res, a, d) {
+    const c = cardCopy(res, a, d);
+    if (!c) return null;
+    const { cv, ctx, W, H } = newCard();
+    const pad = 96;
+    const inner = W - 2 * pad;
 
-    ctx.fillStyle = '#9db4d6';
-    ctx.font = '600 48px system-ui, Segoe UI, Roboto, sans-serif';
-    y = wrapText(ctx, c.sub, pad, y + 44, W - 2 * pad, 62);
+    masthead(ctx, pad, 120);
+    hairline(ctx, pad, 260, W - pad);
 
-    // receipt panel
-    const ry = y + 64;
-    const rh = 600;
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(ctx, pad - 16, ry, W - 2 * (pad - 16), rh, 30);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, pad - 16, ry, W - 2 * (pad - 16), rh, 30);
-    ctx.stroke();
+    ctx.fillStyle = OXBLOOD;
+    ctx.font = `700 32px ${SANS}`;
+    tracked(ctx, 'WHAT MOST FLYERS NEVER CLAIM', pad, 336, 3);
 
-    let ly = ry + 96;
-    ctx.fillStyle = '#7fa9e0';
-    ctx.font = '800 40px system-ui, sans-serif';
-    ctx.fillText(c.panelLabel, pad + 36, ly);
-    ctx.fillStyle = '#2bcf86';
-    const long = c.big.length > 9;
-    ctx.font = `800 ${long ? '120px' : '168px'} system-ui, sans-serif`;
-    ctx.fillText(c.big, pad + 36, ly + (long ? 150 : 180));
-    ly += long ? 250 : 290;
-    ctx.fillStyle = '#7fa9e0';
-    ctx.font = '800 40px system-ui, sans-serif';
-    ctx.fillText('THE RULE', pad + 36, ly);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '600 52px system-ui, sans-serif';
-    wrapText(ctx, c.rule, pad + 36, ly + 70, W - 2 * pad - 72, 62);
+    ctx.fillStyle = INK;
+    ctx.font = `700 88px ${SERIF}`;
+    const afterHead = wrapClamp(ctx, c.headline, pad, 456, inner, 104, 3);
 
-    // CTA
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 66px system-ui, sans-serif';
-    wrapText(ctx, 'What does your airline owe you?', pad, H - 380, W - 2 * pad, 80);
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 56px system-ui, sans-serif';
-    ctx.fillText('Check yours free — it’s your money. \u{1F447}', pad, H - 232);
-    ctx.fillStyle = '#9db4d6';
-    ctx.font = '700 42px system-ui, sans-serif';
-    ctx.fillText('Fairfare · know your rights, get paid', pad, H - 150);
+    ctx.fillStyle = MUTED;
+    ctx.font = `400 40px ${SANS}`;
+    wrapClamp(ctx, c.sub, pad, afterHead + 46, inner, 54, 2);
 
+    // The stub is anchored, so every card tears off in the same place however long the headline ran.
+    const top = 1060;
+    hairline(ctx, pad, top, W - pad, true);
+    ctx.fillStyle = MUTED;
+    ctx.font = `700 30px ${SANS}`;
+    tracked(ctx, c.panelLabel, pad, top + 72, 3);
+    ctx.fillStyle = INK;
+    const big = c.big.length > 12 ? 92 : c.big.length > 8 ? 116 : 148;
+    ctx.font = `700 ${big}px ${SERIF}`;
+    wrapClamp(ctx, c.big, pad, top + 90 + big, inner, big + 10, 2);
+    ctx.fillStyle = MUTED;
+    ctx.font = `700 30px ${SANS}`;
+    tracked(ctx, 'THE RULE', pad, top + 340, 3);
+    ctx.fillStyle = INK;
+    ctx.font = `400 44px ${SERIF}`;
+    wrapClamp(ctx, c.rule, pad, top + 404, inner, 54, 2);
+    hairline(ctx, pad, top + 470, W - pad, true);
+
+    cardFooter(ctx, W, H, pad);
     return cv.toDataURL('image/png');
   }
 
@@ -231,78 +290,63 @@ window.Viral = (function () {
   // Shares the urgency, not outrage — the useful fact is that these windows close.
   function renderDeadlineCard(opts) {
     const { airline, label, daysLeft, amount, rule } = opts || {};
-    const W = 1080, H = 1920;
-    const cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d');
-
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, '#0c1626');
-    g.addColorStop(1, '#15243f');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = daysLeft <= 7 ? '#ef5b6a' : '#1565c0';
-    ctx.fillRect(0, 0, W, 18);
-
+    const { cv, ctx, W, H } = newCard();
     const pad = 96;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 44px system-ui, Segoe UI, Roboto, sans-serif';
-    ctx.fillText('THIS CLAIM WINDOW IS CLOSING', pad, 190);
 
-    // big countdown
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 220px system-ui, sans-serif';
+    let y = masthead(ctx, pad, 120) + 56;
+    hairline(ctx, pad, y, W - pad);
+
+    ctx.fillStyle = daysLeft <= 7 ? OXBLOOD : MUTED;
+    ctx.font = `700 32px ${SANS}`;
+    tracked(ctx, 'THIS CLAIM WINDOW IS CLOSING', pad, y + 76, 3);
+
+    // the countdown, set as a figure rather than a scoreboard
     const n = daysLeft <= 0 ? 'TODAY' : String(daysLeft);
-    ctx.font = `800 ${n.length > 3 ? 130 : 220}px system-ui, sans-serif`;
-    ctx.fillText(n, pad, 430);
+    ctx.fillStyle = daysLeft <= 7 ? OXBLOOD : INK;
+    ctx.font = `700 ${n.length > 3 ? 150 : 230}px ${SERIF}`;
+    ctx.fillText(n, pad, y + 320);
     if (daysLeft > 0) {
-      ctx.fillStyle = '#9db4d6';
-      ctx.font = '800 62px system-ui, sans-serif';
-      ctx.fillText(daysLeft === 1 ? 'day left' : 'days left', pad, 510);
+      ctx.fillStyle = MUTED;
+      ctx.font = `400 54px ${SERIF}`;
+      ctx.fillText(daysLeft === 1 ? 'day left' : 'days left', pad + ctx.measureText(n).width + 0, y + 320);
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 60px system-ui, sans-serif';
-    let y = wrapText(ctx, label || 'to file this claim', pad, 610, W - 2 * pad, 74);
+    ctx.fillStyle = INK;
+    ctx.font = `700 56px ${SERIF}`;
+    y = wrapText(ctx, label || 'to file this claim', pad, y + 420, W - 2 * pad, 70);
 
     if (amount) {
-      const ry = y + 50;
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      roundRect(ctx, pad - 16, ry, W - 2 * (pad - 16), 300, 30);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-      ctx.lineWidth = 2;
-      roundRect(ctx, pad - 16, ry, W - 2 * (pad - 16), 300, 30);
-      ctx.stroke();
-      ctx.fillStyle = '#7fa9e0';
-      ctx.font = '800 40px system-ui, sans-serif';
-      ctx.fillText('WHAT’S ON THE LINE', pad + 36, ry + 80);
-      ctx.fillStyle = '#2bcf86';
-      ctx.font = `800 ${String(amount).length > 9 ? 110 : 150}px system-ui, sans-serif`;
-      ctx.fillText(String(amount), pad + 36, ry + 210);
-      y = ry + 300;
+      const top = y + 50;
+      hairline(ctx, pad, top, W - pad, true);
+      ctx.fillStyle = MUTED;
+      ctx.font = `700 30px ${SANS}`;
+      tracked(ctx, 'WHAT’S ON THE LINE', pad, top + 74, 3);
+      ctx.fillStyle = INK;
+      const big = String(amount).length > 12 ? 84 : 120;
+      ctx.font = `700 ${big}px ${SERIF}`;
+      y = wrapText(ctx, String(amount), pad, top + 74 + big + 20, W - 2 * pad, big + 12);
+      hairline(ctx, pad, y + 36, W - pad, true);
+      y += 36;
     }
 
     if (rule) {
-      ctx.fillStyle = '#9db4d6';
-      ctx.font = '600 42px system-ui, sans-serif';
-      wrapText(ctx, rule, pad, y + 80, W - 2 * pad, 54);
+      ctx.fillStyle = MUTED;
+      ctx.font = `400 38px ${SANS}`;
+      wrapText(ctx, rule, pad, y + 74, W - 2 * pad, 50);
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 62px system-ui, sans-serif';
-    wrapText(ctx, airline ? `Had a problem with ${airline}?` : 'Had a flight go wrong?', pad, H - 360, W - 2 * pad, 76);
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 54px system-ui, sans-serif';
-    ctx.fillText('Check your deadlines free. \u{1F447}', pad, H - 230);
-    ctx.fillStyle = '#9db4d6';
-    ctx.font = '700 42px system-ui, sans-serif';
-    ctx.fillText('Fairfare · know your rights, get paid', pad, H - 150);
-
+    hairline(ctx, pad, H - 300, W - pad);
+    ctx.fillStyle = INK;
+    ctx.font = `700 58px ${SERIF}`;
+    ctx.fillText(airline ? `Had a problem with ${airline}?` : 'Had a flight go wrong?', pad, H - 220);
+    ctx.fillStyle = OXBLOOD;
+    ctx.font = `700 40px ${SANS}`;
+    ctx.fillText('Check your deadlines free  →', pad, H - 152);
+    ctx.fillStyle = MUTED;
+    ctx.font = `600 34px ${SANS}`;
+    ctx.fillText('Fairfare · know your rights, get paid', pad, H - 90);
     return cv.toDataURL('image/png');
   }
-
   function deadlineCaption(opts) {
     const { label, daysLeft, amount, airline } = opts || {};
     const when = daysLeft <= 0 ? 'today' : daysLeft === 1 ? 'tomorrow' : `in ${daysLeft} days`;
@@ -318,76 +362,64 @@ window.Viral = (function () {
   // opts: { rows:[{name, value}], industry, period, lowerBetter, unitLabel, title, pct }
   function renderScorecardCard(opts) {
     const { rows = [], industry = null, period = '', lowerBetter = true, unitLabel = '', title = '', pct = false } = opts || {};
-    const W = 1080, H = 1920;
-    const cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d');
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, '#0c1626');
-    g.addColorStop(1, '#15243f');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(0, 0, W, 18);
-
+    const { cv, ctx, W, H } = newCard();
     const pad = 96;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 40px system-ui, Segoe UI, Roboto, sans-serif';
-    ctx.fillText('THE GOVERNMENT\u2019S OWN NUMBERS', pad, 170);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 72px system-ui, sans-serif';
-    let y = wrapText(ctx, title || 'How the airlines compare', pad, 270, W - 2 * pad, 84);
-    ctx.fillStyle = '#9db4d6';
-    ctx.font = '600 38px system-ui, sans-serif';
-    ctx.fillText(`${unitLabel}${period ? ' \u00b7 ' + period : ''}`, pad, y + 30);
 
+    let y = masthead(ctx, pad, 120) + 56;
+    hairline(ctx, pad, y, W - pad);
+    ctx.fillStyle = MUTED;
+    ctx.font = `700 32px ${SANS}`;
+    tracked(ctx, 'THE GOVERNMENT’S OWN NUMBERS', pad, y + 76, 3);
+    ctx.fillStyle = INK;
+    ctx.font = `700 68px ${SERIF}`;
+    y = wrapText(ctx, title || 'How the airlines compare', pad, y + 170, W - 2 * pad, 80);
+    ctx.fillStyle = MUTED;
+    ctx.font = `400 36px ${SANS}`;
+    ctx.fillText(`${unitLabel}${period ? ' · ' + period : ''}`, pad, y + 26);
+
+    // A ranked table, hairline-ruled: the ranking is the message, so let the figures carry it.
     const list = rows.filter((r) => r.value != null).slice().sort((a, b) => (lowerBetter ? b.value - a.value : a.value - b.value));
     const max = Math.max(...list.map((r) => r.value), industry || 0) || 1;
-    const top = y + 110;
-    const rowH = Math.min(120, Math.floor((H - 520 - top) / Math.max(1, list.length + 1)));
-    const barX = pad + 330, barW = W - pad - barX - 200;
+    const top = y + 96;
+    const rowH = Math.min(116, Math.floor((H - 520 - top) / Math.max(1, list.length + 1)));
+    const barX = pad + 330, barW = W - pad - barX - 210;
     const fmt = (v) => (pct ? `${Number(v).toFixed(1)}%` : Number(v).toFixed(2));
+    hairline(ctx, pad, top - 20, W - pad);
     list.forEach((r, i) => {
       const yy = top + i * rowH;
       const worst = i === 0, best = i === list.length - 1;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `800 ${rowH > 100 ? 42 : 36}px system-ui, sans-serif`;
-      const nm = String(r.name).replace(/ (Air Lines|Airlines|Airways|Air)$/i, '');
-      ctx.fillText(nm, pad, yy + rowH * 0.62);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      roundRect(ctx, barX, yy + rowH * 0.22, barW, rowH * 0.5, 14); ctx.fill();
-      ctx.fillStyle = worst ? '#ef5b6a' : best ? '#2bcf86' : '#7fa9e0';
-      roundRect(ctx, barX, yy + rowH * 0.22, Math.max(14, barW * (r.value / max)), rowH * 0.5, 14); ctx.fill();
-      ctx.fillStyle = worst ? '#ef5b6a' : best ? '#2bcf86' : '#ffffff';
-      ctx.font = `800 ${rowH > 100 ? 42 : 36}px system-ui, sans-serif`;
+      ctx.fillStyle = INK;
+      ctx.font = `${worst || best ? 700 : 400} ${rowH > 100 ? 40 : 34}px ${SERIF}`;
+      ctx.fillText(String(r.name).replace(/ (Air Lines|Airlines|Airways|Air)$/i, ''), pad, yy + rowH * 0.62);
+      // the bar is a rule, not a candy stripe
+      ctx.fillStyle = worst ? OXBLOOD : best ? NAVY : '#9aa3ab';
+      ctx.fillRect(barX, yy + rowH * 0.42, Math.max(10, barW * (r.value / max)), 10);
+      ctx.fillStyle = INK;
+      ctx.font = `700 ${rowH > 100 ? 40 : 34}px ${SANS}`;
       ctx.textAlign = 'right';
       ctx.fillText(fmt(r.value), W - pad, yy + rowH * 0.62);
       ctx.textAlign = 'left';
+      hairline(ctx, pad, yy + rowH - 8, W - pad);
     });
     if (industry != null) {
-      const yy = top + list.length * rowH + 20;
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-      ctx.setLineDash([12, 12]);
-      ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(W - pad, yy); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#9db4d6';
-      ctx.font = '600 36px system-ui, sans-serif';
-      ctx.fillText(`All airlines: ${fmt(industry)}`, pad, yy + 52);
+      const yy = top + list.length * rowH + 16;
+      ctx.fillStyle = MUTED;
+      ctx.font = `400 34px ${SANS}`;
+      ctx.fillText(`All airlines: ${fmt(industry)}`, pad, yy + 40);
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 54px system-ui, sans-serif';
-    wrapText(ctx, 'Source: U.S. DOT Air Travel Consumer Report.', pad, H - 330, W - 2 * pad, 66);
-    ctx.fillStyle = '#f3a93c';
-    ctx.font = '800 48px system-ui, sans-serif';
-    ctx.fillText('Check any airline free before you book. \U0001F447', pad, H - 220);
-    ctx.fillStyle = '#9db4d6';
-    ctx.font = '700 42px system-ui, sans-serif';
-    ctx.fillText('Fairfare \u00b7 know your rights, get paid', pad, H - 150);
+    hairline(ctx, pad, H - 300, W - pad);
+    ctx.fillStyle = INK;
+    ctx.font = `700 50px ${SERIF}`;
+    wrapText(ctx, 'Source: U.S. DOT Air Travel Consumer Report.', pad, H - 220, W - 2 * pad, 60);
+    ctx.fillStyle = OXBLOOD;
+    ctx.font = `700 40px ${SANS}`;
+    ctx.fillText('Check any airline free before you book  →', pad, H - 152);
+    ctx.fillStyle = MUTED;
+    ctx.font = `600 34px ${SANS}`;
+    ctx.fillText('Fairfare · know your rights, get paid', pad, H - 90);
     return cv.toDataURL('image/png');
   }
-
   function scorecardCaption(opts) {
     const { rows = [], title = '', period = '', lowerBetter = true, unitLabel = '', pct = false } = opts || {};
     const list = rows.filter((r) => r.value != null).slice().sort((a, b) => (lowerBetter ? b.value - a.value : a.value - b.value));
