@@ -23,11 +23,11 @@ export default function HomeScreen() {
         const v = await AsyncStorage.getItem('ff-trips');
         const trips: Trip[] = v ? JSON.parse(v) : [];
         if (!Array.isArray(trips) || !trips.length) { if (alive) setNeeds(0); return; }
-        const watches = await fetchWatches();
+        const watches = await fetchWatches(trips.map((t) => t.id));
         let n = 0;
         for (const t of trips) {
           const w = watches[t.id];
-          if (w) n += (w.alerts || []).filter((a) => !a.seen && a.kind !== 'minor_change').length;
+          if (w) n += (w.alerts || []).filter((a) => !a.seen && !a.resolved && a.kind !== 'minor_change').length;
           n += deadlines(t).filter((d) => d.status !== 'expired' && d.daysLeft <= 3).length;
         }
         if (alive) setNeeds(n);

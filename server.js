@@ -108,8 +108,15 @@ const server = http.createServer(async (req, res) => {
 
     // ---- watchdog: register a trip, poll its alerts, force a sweep ----
     if (url.pathname === '/api/watch' && req.method === 'POST') return await handleWatchRegister(req, res);
-    if (url.pathname === '/api/watch' && req.method === 'GET') return json(res, { watches: watchdog.list(), summary: watchdog.summary() });
+    if (url.pathname === '/api/watch' && req.method === 'GET') {
+      // Only the caller's own watches, by trip id — never every user's routes, flights and fares.
+      const ids = (url.searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200);
+      const watches = watchdog.getMany(ids);
+      return json(res, { watches, summary: watchdog.summary(watches) });
+    }
     if (url.pathname === '/api/watch/sweep' && req.method === 'POST') {
+      // A sweep fires paced live searches for every watch. On a public deploy set SWEEP_TOKEN so only the scheduler can start one.
+      if (process.env.SWEEP_TOKEN && req.headers['x-sweep-token'] !== process.env.SWEEP_TOKEN) return json(res, { error: 'Forbidden' }, 403);
       const r = await watchdog.sweep(runSearch, { log: (m) => console.log('  ' + m), onPrice: history.record });
       return json(res, { ...r, summary: watchdog.summary() });
     }
@@ -396,15 +403,19 @@ async function handleCalendar(req, res) {
 // first sweep can already detect a change.
 async function handleWatchRegister(req, res) {
   const body = await readBody(req);
-  const { origin = 'HLN', destination, departDate, returnDate, tier = 'platinum', id } = body || {};
+  const { origin = 'HLN', destination, departDate, returnDate, tier = 'platinum', id, airline, flightNo, fare, itinerary } = body || {};
   if (!destination || !departDate) return json(res, { error: 'destination and departDate are required.' }, 400);
   const dest = String(destination).toUpperCase();
-  let baseline = null;
-  try {
-    const r = await runSearch({ origin, destination: dest, departDate, returnDate, adults: 1 }, tier);
-    baseline = r.offers.find((o) => o.companion && o.companion.status !== 'ineligible') || r.offers[0] || null;
-  } catch { /* baseline on first sweep instead */ }
-  const w = watchdog.register({ id, origin, destination: dest, departDate, returnDate, zone: zoneOf(dest), iata: 'DL', tier }, baseline);
+  const trip = { id, origin, destination: dest, departDate, returnDate, zone: zoneOf(dest), tier, airline, flightNo, fare, itinerary };
+  // The baseline is THE BOOKING found in a live search — never just the cheapest flight on the route.
+  let offers = null;
+  if (watchdog.canWatch(trip)) {
+    try {
+      const r = await runSearch({ origin, destination: dest, departDate, returnDate, adults: 1 }, tier);
+      if (!r.blocked && !r.degraded && !/sample|mock|fallback/i.test(String(r.source || ''))) offers = r.offers;
+    } catch { /* baseline on the first sweep instead */ }
+  }
+  const w = watchdog.register(trip, offers);
   return json(res, w);
 }
 

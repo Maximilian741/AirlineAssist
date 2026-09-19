@@ -41,20 +41,20 @@ test('no watches, no issues, no near deadlines -> no events', () => {
   assert.deepEqual(computeEvents([trip()], {}), []);
 });
 
-test('a watchdog price drop becomes a "$N back" notification with a stable key', () => {
+test('a watchdog price drop says how far below what was paid, with a stable key', () => {
   const w = { t1: { id: 't1', alerts: [{ kind: 'price_drop', severity: 'high', title: 'Fare dropped $80', detail: 'x', lever: 'Rebook', delta: 80 }] } };
   const ev = computeEvents([trip()], w);
   assert.equal(ev.length, 1);
   assert.equal(ev[0].key, 'wd:t1:price_drop:80');
   assert.match(ev[0].title, /HLN→JFK: Fare dropped \$80/);
-  assert.match(ev[0].body, /\$80 back/);
+  assert.match(ev[0].body, /\$80 below what you paid/);
   assert.equal(ev[0].data.tripId, 't1');
 });
 
-test('a significant schedule change says "cash refund unlocked"', () => {
+test('a significant change to the booked flight says the refund depends on declining it', () => {
   const w = { t1: { id: 't1', alerts: [{ kind: 'significant_change', severity: 'high', title: 'Outbound changed', detail: 'x', lever: 'Decline and refund', delta: 210 }] } };
   const ev = computeEvents([trip()], w);
-  assert.match(ev[0].body, /cash refund unlocked/);
+  assert.match(ev[0].body, /Full refund if you decline it/);
 });
 
 test('minor changes never notify (no alert fatigue)', () => {
@@ -94,4 +94,15 @@ test('every event carries deep-link data pointing at the trips screen', () => {
     assert.equal(e.data.screen, 'trips');
     assert.equal(e.data.tripId, 't1');
   }
+});
+
+test('retired alerts and "couldn’t find your flight" notes never notify; a drop measured from the watch start says so', () => {
+  const w = { t1: { id: 't1', alerts: [
+    { kind: 'price_drop', delta: 30, title: 'x', detail: 'x', resolved: true },
+    { kind: 'flight_not_found', severity: 'low', title: 'Couldn’t find your flight', detail: 'x' },
+    { kind: 'price_drop', delta: 12, basis: 'watch', title: 'Fare dropped $12', detail: 'x' },
+  ] } };
+  const ev = computeEvents([trip()], w);
+  assert.equal(ev.length, 1);
+  assert.match(ev[0].body, /\$12 below the price when the watch started/);
 });

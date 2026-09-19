@@ -22,11 +22,15 @@ const NOTIFIED_KEY = 'ff-notified';
 const TRIPS_KEY = 'ff-trips';
 
 export type WatchAlert = {
-  kind: string; severity: string; title: string; detail: string; lever?: string | null; rule?: string | null; delta?: number; at?: string; seen?: boolean;
+  kind: string; severity: string; title: string; detail: string; lever?: string | null; rule?: string | null; delta?: number | null; at?: string; seen?: boolean;
+  resolved?: boolean; basis?: 'paid' | 'watch'; leg?: 'outbound' | 'inbound'; was?: string; now?: string;
 };
 export type WatchLeg = { from?: string; to?: string; dep?: string | null; arr?: string | null; flight?: string | null };
 export type WatchSnapshot = { price?: number; outbound?: WatchLeg[]; inbound?: WatchLeg[]; stops?: number } | null;
-export type Watch = { id: string; alerts: WatchAlert[]; checks?: number; lastCheckedAt?: string | null; lastError?: string | null; baseline?: WatchSnapshot; latest?: WatchSnapshot };
+export type Watch = {
+  id: string; alerts: WatchAlert[]; checks?: number; lastCheckedAt?: string | null; lastError?: string | null; baseline?: WatchSnapshot; latest?: WatchSnapshot;
+  status?: 'active' | 'unsupported'; match?: 'matched' | 'not_found' | 'unmatchable' | 'route_only' | null; booking?: unknown;
+};
 
 let handlerInstalled = false;
 export function installHandler() {
@@ -80,28 +84,49 @@ async function loadTrips(): Promise<Trip[]> {
   try { const v = await AsyncStorage.getItem(TRIPS_KEY); const arr = v ? JSON.parse(v) : []; return Array.isArray(arr) ? arr : []; } catch { return []; }
 }
 
-export async function fetchWatches(): Promise<Record<string, Watch>> {
-  if (!HAS_API) return {};
+/** This device's own watches, by trip id. null when the server couldn't be asked, so callers don't mistake
+ *  "unreachable" for "the server has none". */
+export async function fetchWatchesOrNull(ids: string[]): Promise<Record<string, Watch> | null> {
+  if (!HAS_API) return null;
+  if (!ids.length) return {};
   try {
-    const res = await fetch(`${API_BASE}/api/watch`);
-    if (!res.ok) return {};
+    const res = await fetch(`${API_BASE}/api/watch?ids=${encodeURIComponent(ids.join(','))}`);
+    if (!res.ok) return null;
     const data = await res.json();
     const out: Record<string, Watch> = {};
     for (const w of data.watches || []) out[w.id] = w;
     return out;
-  } catch { return {}; }
+  } catch { return null; }
+}
+export async function fetchWatches(ids: string[]): Promise<Record<string, Watch>> {
+  return (await fetchWatchesOrNull(ids)) || {};
 }
 
-/** Register a trip with the server watchdog (fire-and-forget). */
+/** Register a trip with the server watchdog (fire-and-forget). The flight number and what was paid are what
+ *  let it follow THIS booking instead of whatever flight is cheapest on the route. */
 export async function watchTrip(t: Trip): Promise<boolean> {
   if (!HAS_API || !t.origin || !t.dest || !t.departDate) return false;
   try {
     const res = await fetch(`${API_BASE}/api/watch`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: t.id, origin: t.origin, destination: t.dest, departDate: t.departDate, returnDate: t.returnDate || '', tier: 'platinum' }),
+      body: JSON.stringify({ id: t.id, origin: t.origin, destination: t.dest, departDate: t.departDate, returnDate: t.returnDate || '', tier: 'platinum', airline: t.airline || '', flightNo: t.flightNo || '', fare: t.fare || '' }),
     });
     return res.ok;
   } catch { return false; }
+}
+
+/** Stop the server re-checking a trip that was removed from this device. */
+export async function unwatchTrip(id: string): Promise<void> {
+  if (!HAS_API) return;
+  try { await fetch(`${API_BASE}/api/watch/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {}
+}
+
+/** Re-register upcoming trips the server lost (a free host wipes its disk when it sleeps or redeploys) or
+ *  registered before it knew which flight was booked. Safe to repeat: keyed on the trip id. */
+export async function resyncWatches(trips: Trip[], watches: Record<string, Watch>, today: string): Promise<number> {
+  const lost = trips.filter((t) => t.origin && t.dest && t.departDate && t.departDate >= today && (!watches[t.id] || !watches[t.id].booking));
+  for (const t of lost) await watchTrip(t);
+  return lost.length;
 }
 
 export type PendingEvent = { key: string; title: string; body: string; data: Record<string, string> };
@@ -120,9 +145,12 @@ export function computeEventsCore(trips: Trip[], watches: Record<string, Watch>,
     const w = watches[t.id];
     if (!w) continue;
     for (const a of w.alerts || []) {
-      if (a.kind === 'minor_change') continue;
+      // Retired alerts, sub-threshold retimes and "couldn't find your flight" notes never buzz a phone.
+      if (a.resolved || a.kind === 'minor_change' || a.kind === 'flight_not_found') continue;
       const key = `wd:${t.id}:${a.kind}:${a.delta ?? ''}`;
-      const money = a.kind === 'price_drop' && a.delta ? `$${a.delta} back` : a.kind === 'significant_change' ? 'cash refund unlocked' : 'free rebooking unlocked';
+      const money = a.kind === 'price_drop' && a.delta
+        ? `$${a.delta} below ${a.basis === 'watch' ? 'the price when the watch started' : 'what you paid'}`
+        : a.kind === 'significant_change' ? 'Full refund if you decline it' : 'Free rebooking unlocked';
       events.push({
         key,
         title: `${route(t)}: ${a.title}`,
@@ -158,7 +186,8 @@ export async function checkAndNotify(): Promise<{ fired: number; pending: number
   if (Platform.OS === 'web') return { fired: 0, pending: 0 };
   installHandler();
   const ok = await ensurePermission();
-  const [trips, watches, notified] = await Promise.all([loadTrips(), fetchWatches(), loadNotified()]);
+  const [trips, notified] = await Promise.all([loadTrips(), loadNotified()]);
+  const watches = await fetchWatches(trips.map((t) => t.id));
   const events = computeEvents(trips, watches);
   let fired = 0;
   // Without permission nothing is recorded as sent, so granting it later still delivers what's pending.

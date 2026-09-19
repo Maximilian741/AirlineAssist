@@ -405,7 +405,9 @@ window.Trips = (function () {
     try {
       const res = await fetch('/api/watch', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: trip.id, origin: trip.origin, destination: trip.dest, departDate: trip.departDate, returnDate: trip.returnDate || '', tier: 'platinum' }),
+        // What identifies THE booking: the flight number typed, what was paid, and — for a trip saved from a
+        // search result — that result's exact itinerary. Without them the watchdog can only name the route.
+        body: JSON.stringify({ id: trip.id, origin: trip.origin, destination: trip.dest, departDate: trip.departDate, returnDate: trip.returnDate || '', tier: 'platinum', airline: trip.airline || '', flightNo: trip.flightNo || '', fare: trip.fare || '', itinerary: trip.itinerary || null }),
       });
       if (!res.ok) return null;
       const w = await res.json();
@@ -419,8 +421,11 @@ window.Trips = (function () {
   }
   /** Fetch alerts for every watched trip in one round-trip. Returns { byTripId, summary }. */
   async function pullAlerts() {
+    const ids = all().filter((t) => t.watched).map((t) => t.watchId || t.id);
+    if (!ids.length) return { byTripId: {}, summary: { watches: 0, unseen: 0, moneyFound: 0 } };
     try {
-      const res = await fetch('/api/watch');
+      // Only this device's own watches.
+      const res = await fetch('/api/watch?ids=' + encodeURIComponent(ids.join(',')));
       if (!res.ok) return { byTripId: {}, summary: null };
       const data = await res.json();
       const byTripId = {};
@@ -428,9 +433,21 @@ window.Trips = (function () {
       return { byTripId, summary: data.summary || null };
     } catch { return { byTripId: {}, summary: null }; }
   }
+  /** Re-register upcoming watched trips the server no longer has (a free host wipes its disk when it sleeps or
+   *  redeploys) or that were registered before it knew which flight was booked. Safe to repeat: a registration
+   *  is keyed on the trip id. Returns how many were re-sent. */
+  async function resync(byTripId) {
+    const lost = all().filter((t) => {
+      if (!t.watched || !t.origin || !t.dest || !t.departDate || t.departDate < today()) return false;
+      const w = byTripId[t.watchId || t.id];
+      return !w || !w.booking;
+    });
+    for (const t of lost) await watch(t);
+    return lost.length;
+  }
   async function ackAlerts(trip) {
     try { await fetch('/api/watch/' + encodeURIComponent(trip.watchId || trip.id) + '/ack', { method: 'POST' }); } catch {}
   }
 
-  return { all, add, update, remove, deadlines, upcoming, atStake, claimAnswers, claimDetails, fmt, today, daysBetween, airlineFromFlightNo, checkFare, moneyOnTable, watch, unwatch, pullAlerts, ackAlerts };
+  return { all, add, update, remove, deadlines, upcoming, atStake, claimAnswers, claimDetails, fmt, today, daysBetween, airlineFromFlightNo, checkFare, moneyOnTable, watch, unwatch, pullAlerts, resync, ackAlerts };
 })();

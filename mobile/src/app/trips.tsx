@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,10 +13,10 @@ import { AIRLINES } from '@/data/airlines';
 import { FAREDROP, FAREDROP_VERIFIED } from '@/data/faredrop';
 import { useTheme } from '@/hooks/use-theme';
 import { loadClaims } from '@/components/claim-tracker';
-import { checkAndNotify, ensurePermission, fetchWatches, scheduleDeadlineReminders, watchTrip, type Watch } from '@/lib/alerts';
+import { checkAndNotify, ensurePermission, fetchWatches, fetchWatchesOrNull, resyncWatches, scheduleDeadlineReminders, unwatchTrip, watchTrip, type Watch } from '@/lib/alerts';
 import { fmt as fmtDay, nextAction, timeline, type TrackedClaim } from '@/lib/claimtrack';
 import { assess, nextQuestion } from '@/lib/claim-engine';
-import { airlineFromFlightNo, claimAnswers, deadlines, fmt, ISSUE_LABELS, newId, type Deadline, type Trip, type TripIssue } from '@/lib/trips';
+import { airlineFromFlightNo, claimAnswers, deadlines, fmt, ISSUE_LABELS, newId, today, type Deadline, type Trip, type TripIssue } from '@/lib/trips';
 
 const KEY = 'ff-trips';
 const shortName = (n: string) => n.replace(/\s*\(.*\)\s*$/, '');
@@ -42,18 +42,34 @@ export default function TripsScreen() {
   const [claims, setClaims] = useState<TrackedClaim[]>([]);
   useEffect(() => { loadClaims().then((l) => setClaims(l.filter((c) => c.status === 'open' && c.filings.length))); }, []);
 
-  const refreshWatches = useCallback(() => {
-    fetchWatches().then(setWatches).catch(() => {});
+  const refreshWatches = useCallback((list: Trip[]) => {
+    fetchWatches(list.map((t) => t.id)).then(setWatches).catch(() => {});
   }, []);
+
+  // Once per visit: put back any watch the server lost (a free host wipes its disk) or registered before it
+  // knew which flight was booked. Skipped when the server can't be reached — unreachable isn't "none".
+  const resynced = useRef(false);
+  const resync = useCallback((list: Trip[]) => {
+    if (resynced.current || !list.length) return;
+    resynced.current = true;
+    fetchWatchesOrNull(list.map((t) => t.id))
+      .then(async (ws) => { if (ws && (await resyncWatches(list, ws, today()))) refreshWatches(list); })
+      .catch(() => {});
+  }, [refreshWatches]);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
-      .then((v) => { if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) setTrips(p); } catch {} } })
+      .then((v) => {
+        let list: Trip[] = [];
+        if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) list = p; } catch {} }
+        setTrips(list);
+        refreshWatches(list);
+        resync(list);
+      })
       .finally(() => setLoaded(true));
-    refreshWatches();
     // Opening the vault is a natural moment to fire anything new.
     checkAndNotify().catch(() => {});
-  }, [refreshWatches]);
+  }, [refreshWatches, resync]);
 
   const persist = useCallback((list: Trip[]) => {
     setTrips(list);
@@ -68,7 +84,7 @@ export default function TripsScreen() {
     persist(list);
     setEditing(null);
     // Put the machine on it: the server re-checks this trip for fare drops + schedule shifts.
-    watchTrip(withId).then((ok) => { if (ok) refreshWatches(); });
+    watchTrip(withId).then((ok) => { if (ok) refreshWatches(list); });
     // Saving a trip is when reminders become useful, so this is where the OS permission prompt belongs.
     ensurePermission(true).then((ok) => {
       if (!ok) return;
@@ -79,7 +95,7 @@ export default function TripsScreen() {
   const del = (id: string) => {
     Alert.alert('Remove trip?', 'This deletes it from this device.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => persist(trips.filter((t) => t.id !== id)) },
+      { text: 'Remove', style: 'destructive', onPress: () => { unwatchTrip(id); persist(trips.filter((t) => t.id !== id)); } },
     ]);
   };
 
@@ -208,12 +224,20 @@ function FareDropPlaybook({ airline, drop, theme }: { airline?: string; drop?: n
 function WatchAlerts({ watch, theme, tripId, airline }: { watch?: Watch; theme: Theme; tripId: string; airline?: string }) {
   const router = useRouter();
   if (!watch) return null;
-  const alerts = (watch.alerts || []).filter((a) => a.kind !== 'minor_change');
+  const why = watch.status === 'unsupported'
+    ? 'Automatic re-checks work for Delta flights only for now — the live fare sources list Delta alone. Your deadlines are still tracked.'
+    : watch.match === 'unmatchable'
+      ? 'This fare source doesn’t list flight numbers, so the watchdog can’t follow your flight — fare drops and schedule changes on it won’t be caught automatically.'
+      : watch.match === 'route_only'
+        ? 'Add your flight number so the watchdog knows which flight is yours — until then it can’t tell your flight from the others on this route.'
+        : '';
+  const alerts = watch.status === 'unsupported' ? [] : (watch.alerts || []).filter((a) => a.kind !== 'minor_change' && !a.resolved);
   if (!alerts.length) {
-    return <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>Watchdog on it — no changes yet{watch.checks ? ` (checked ${watch.checks}×)` : ''}.</ThemedText>;
+    return <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>{why || `Watchdog on it — no changes to your flight yet${watch.checks ? ` (checked ${watch.checks}×)` : ''}.`}</ThemedText>;
   }
   return (
     <View style={{ marginTop: 8, gap: 7 }}>
+      {why ? <ThemedText type="small" themeColor="textSecondary">{why}</ThemedText> : null}
       {alerts.map((a, i) => (
         <ThemedView key={i} type="card" style={[styles.wdAlert, { borderColor: theme.line, borderLeftColor: a.severity === 'high' ? theme.good : theme.warn }]}>
           <ThemedText style={{ fontWeight: '800', fontSize: 14 }}>{a.title}{!a.seen ? <ThemedText style={{ color: theme.good, fontSize: 11, fontWeight: '800' }}>  NEW</ThemedText> : null}</ThemedText>
@@ -223,13 +247,13 @@ function WatchAlerts({ watch, theme, tripId, airline }: { watch?: Watch; theme: 
               <ThemedText type="small" style={{ lineHeight: 19 }}><ThemedText type="smallBold">Do this: </ThemedText>{a.lever}{a.rule ? ` (${a.rule})` : ''}</ThemedText>
             </ThemedView>
           ) : null}
-          {a.kind === 'price_drop' ? <FareDropPlaybook airline={airline} drop={a.delta} theme={theme} /> : null}
+          {a.kind === 'price_drop' ? <FareDropPlaybook airline={airline} drop={a.delta ?? undefined} theme={theme} /> : null}
           {a.kind === 'significant_change' ? (
             <Pressable
               onPress={() => {
-                const leg = /^Return/.test(a.title || '') ? 'inbound' : 'outbound';
+                const leg = a.leg || (/^Return/.test(a.title || '') ? 'inbound' : 'outbound');
                 const routeChange = /connection|different airport/i.test(a.detail || '') ? '1' : '0';
-                router.push({ pathname: '/owed', params: { tripId, type: 'schedule', delta: String(a.delta ?? ''), route: routeChange, earlier: /earlier/i.test(a.detail || '') ? '1' : '0', from: legSummary(watch.baseline?.[leg]), to: legSummary(watch.latest?.[leg]) } });
+                router.push({ pathname: '/owed', params: { tripId, type: 'schedule', delta: String(a.delta ?? ''), route: routeChange, earlier: /earlier/i.test(a.detail || '') ? '1' : '0', from: a.was || legSummary(watch.baseline?.[leg]), to: a.now || legSummary(watch.latest?.[leg]) } });
               }}
               style={({ pressed }) => [styles.wdBtn, { backgroundColor: theme.brand }, pressed && { opacity: 0.7 }]}>
               <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 13.5 }}>Write the refund request →</ThemedText>

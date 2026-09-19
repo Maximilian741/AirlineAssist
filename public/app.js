@@ -1603,7 +1603,18 @@ function renderTrips() {
   // Pull the watchdog's findings once per render; re-render when they land so alerts appear.
   if (!state.watchPulling) {
     state.watchPulling = true;
-    Trips.pullAlerts().then((r) => { state.watch = r; state.watchPulling = false; if (state.takeoverShown === 'trips' && !state.tripEditing) renderTripsBody(); });
+    Trips.pullAlerts().then(async (r) => {
+      state.watch = r; state.watchPulling = false;
+      if (state.takeoverShown === 'trips' && !state.tripEditing) renderTripsBody();
+      // Once per page load: put back any watch the server lost (its disk resets on a free host).
+      if (r.summary && !state.watchResynced) {
+        state.watchResynced = true;
+        if (await Trips.resync(r.byTripId)) {
+          state.watch = await Trips.pullAlerts();
+          if (state.takeoverShown === 'trips' && !state.tripEditing) renderTripsBody();
+        }
+      }
+    });
   }
   renderTripsBody();
 }
@@ -1646,7 +1657,12 @@ function renderTripsBody() {
     renderTrips();
   }));
   $$('[data-trip-del]').forEach((b) => b.addEventListener('click', () => {
-    if (confirm('Remove this trip?')) { Trips.remove(b.dataset.tripDel); renderTrips(); }
+    if (confirm('Remove this trip?')) {
+      const gone = Trips.all().find((x) => x.id === b.dataset.tripDel);
+      if (gone && gone.watched) Trips.unwatch(gone); // stop the server re-checking a trip that no longer exists
+      Trips.remove(b.dataset.tripDel);
+      renderTrips();
+    }
   }));
   $$('[data-trip-claim]').forEach((b) => b.addEventListener('click', () => openClaimFromTrip(b.dataset.tripClaim)));
   $$('[data-trip-fare]').forEach((b) => b.addEventListener('click', () => doFareCheck(b.dataset.tripFare)));
@@ -1697,8 +1713,7 @@ function openRefundFromAlert(tripId, alertIdx) {
   if (!t || !w) return;
   const a = (w.alerts || [])[alertIdx];
   if (!a) return;
-  const isReturn = /^Return/.test(a.title || '');
-  const leg = isReturn ? 'inbound' : 'outbound';
+  const leg = a.leg || (/^Return/.test(a.title || '') ? 'inbound' : 'outbound');
   const wasLegs = w.baseline ? w.baseline[leg] : null;
   const nowLegs = w.latest ? w.latest[leg] : null;
   const routeChange = /connection|different airport/i.test(a.detail || '');
@@ -1707,8 +1722,9 @@ function openRefundFromAlert(tripId, alertIdx) {
     schedDelta: routeChange ? 'route' : deltaBand(a.delta),
     schedAccepted: 'no',
     incidentDate: (a.at || new Date().toISOString()).slice(0, 10),
-    schedFrom: legSummary(wasLegs) || undefined,
-    schedTo: legSummary(nowLegs) || undefined,
+    // The alert carries the booked flight's own before/after times; older alerts fall back to the leg.
+    schedFrom: a.was || legSummary(wasLegs) || undefined,
+    schedTo: a.now || legSummary(nowLegs) || undefined,
     schedDirection: /earlier/i.test(a.detail || '') ? 'earlier' : 'later',
     flightDate: t.departDate || undefined,
   });
@@ -1796,12 +1812,21 @@ function fareDropPlaybookHtml(t, drop) {
 function watchAlertsHtml(t) {
   const w = state.watch && state.watch.byTripId ? state.watch.byTripId[t.watchId || t.id] : null;
   if (!w) {
-    return t.watched ? `<div class="wd-line quiet">Watchdog on it — re-checks for fare drops and schedule changes automatically${w && w.lastCheckedAt ? '' : '. First check runs shortly.'}</div>` : '';
+    return t.watched ? `<div class="wd-line quiet">The watchdog isn’t reachable right now — manual fare checks still work.</div>` : '';
   }
+  if (w.status === 'unsupported') {
+    return `<div class="wd-line quiet">Automatic re-checks work for Delta flights only for now — the live fare sources list Delta alone. Your deadlines are still tracked.</div>`;
+  }
+  const why = w.match === 'unmatchable'
+    ? `This fare source doesn’t list flight numbers, so the watchdog can’t follow ${esc(t.flightNo || 'your flight')} — fare drops and schedule changes on it won’t be caught automatically.`
+    : w.match === 'route_only'
+      ? 'Add your flight number so the watchdog knows which flight is yours — until then it can’t tell your flight from the others on this route.'
+      : '';
+  const whyLine = why ? `<div class="wd-line quiet">${why}</div>` : '';
   const alerts = (w.alerts || []).filter((a) => !a.resolved);
   const meta = `checked ${w.checks || 0}× · ${w.lastCheckedAt ? 'last ' + new Date(w.lastCheckedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'first check pending'}${w.lastError ? ' · ' + esc(w.lastError) : ''}`;
-  if (!alerts.length) return `<div class="wd-line quiet">Watchdog on it — no changes yet <span class="hint">(${meta})</span></div>`;
-  return `<div class="wd-alerts">${alerts.map((a) => `
+  if (!alerts.length) return whyLine || `<div class="wd-line quiet">Watchdog on it — no changes to your flight yet <span class="hint">(${meta})</span></div>`;
+  return `${whyLine}<div class="wd-alerts">${alerts.map((a) => `
     <div class="wd-alert ${esc(a.severity)}${a.seen ? ' seen' : ''}">
       <div class="wd-title">${esc(a.title)}${a.seen ? '' : ' <span class="wd-new">new</span>'}</div>
       <div class="wd-detail">${esc(a.detail)}</div>
@@ -2050,6 +2075,8 @@ function renderTripForm() {
       arrDelay: ['delayed', 'bumped'].includes($('#tf-issue').value) ? $('#tf-delay').value : '',
     };
     if (!data.airline && !data.departDate) { alert('Add at least the airline or the flight date.'); return; }
+    // A saved itinerary identifies the booking only while the route, date and flight still match it.
+    if (t.id && t.itinerary && (t.origin !== data.origin || t.dest !== data.dest || t.departDate !== data.departDate || (t.flightNo || '') !== data.flightNo)) data.itinerary = null;
     const saved = t.id ? Trips.update(t.id, data) : Trips.add(data);
     state.tripEditing = null;
     // Put the machine on it: server re-checks this trip for fare drops and schedule shifts.
@@ -2237,13 +2264,25 @@ function openBuyCheckPrefilled(o) {
     : `Buy Check pre-filled from your ${esc(o.dest)} result — double-check “Flying to,” we don't recognize that airport's region.`);
 }
 
+// The saved result's exact flights, so the watchdog follows THEM rather than whatever is cheapest later.
+function itineraryOf(o) {
+  const legs = (leg) => (o && o[leg] && Array.isArray(o[leg].segments)
+    ? o[leg].segments.map((s) => ({ from: s.from, to: s.to, dep: s.dep || null, arr: s.arr || null, flight: s.flightNumber || null, cabin: s.cabin || null }))
+    : []);
+  return { outbound: legs('outbound'), inbound: legs('inbound') };
+}
+
 // One tap: found deal -> the trip vault, fare-drop watch armed. The claim deadlines arm
 // themselves the moment a booking date or an issue is added later.
 function saveTripFromOffer(o) {
   const d = (state.meta && state.meta.destinations || []).find((x) => x.code === o.dest);
   const zone = d ? d.zone : null;
+  const itinerary = o.offer ? itineraryOf(o.offer) : null;
+  const first = itinerary && itinerary.outbound[0];
   const t = Trips.add({
     airline: 'Delta Air Lines',
+    flightNo: first && /\d/.test(first.flight || '') ? first.flight : '',
+    itinerary,
     origin: state.origin,
     dest: o.dest,
     departDate: o.depart || '',
@@ -2298,13 +2337,14 @@ function renderSearch(data, params) {
     </div>
     <div id="deal-verdict" class="deal-line"></div>`;
   }
-  html += offers.map((o) => offerCard(o, params)).join('') || '<p class="hint">No Delta offers returned for these dates. Try different dates.</p>';
+  state.lastOffers = offers;
+  html += offers.map((o, i) => offerCard(o, params, i)).join('') || '<p class="hint">No Delta offers returned for these dates. Try different dates.</p>';
   $('#results').innerHTML = html;
   wireStarButtons(params.tier);
   $$('[data-bc-offer]').forEach((b) => b.addEventListener('click', () =>
     openBuyCheckPrefilled({ dest: b.dataset.dest, price: b.dataset.price, klass: b.dataset.klass, basic: !!b.dataset.basic })));
   $$('[data-save-trip]').forEach((b) => b.addEventListener('click', () =>
-    saveTripFromOffer({ dest: b.dataset.dest, price: b.dataset.price, depart: b.dataset.depart, ret: b.dataset.return })));
+    saveTripFromOffer({ dest: b.dataset.dest, price: b.dataset.price, depart: b.dataset.depart, ret: b.dataset.return, offer: (state.lastOffers || [])[Number(b.dataset.offerIdx)] || null })));
   const tb = $('#trend-btn');
   if (tb) tb.addEventListener('click', () => loadTrend(params));
 
@@ -2330,7 +2370,7 @@ function statusTag(c) {
   return `<span class="tag inelig">Not on this fare</span>`;
 }
 
-function offerCard(o, params) {
+function offerCard(o, params, idx) {
   const e = o.companion;
   const v = o.value;
   const dest = lastStop(o.outbound) || params.destination;
@@ -2364,7 +2404,7 @@ function offerCard(o, params) {
         data-basic="${o.basicEconomy || o.basic ? '1' : ''}">Buy Check ›</button>
       <button class="save-trip-btn" data-save-trip
         data-dest="${esc(dest)}" data-price="${esc(o.price?.total ?? '')}"
-        data-depart="${esc(params.departDate || '')}" data-return="${esc(params.returnDate || '')}">＋ My Trips</button>
+        data-depart="${esc(params.departDate || '')}" data-return="${esc(params.returnDate || '')}" data-offer-idx="${idx}">＋ My Trips</button>
       <a href="${googleFlights(dest, params)}" target="_blank" rel="noopener">Google Flights ↗</a>
       <a href="${deltaLink(dest, params)}" target="_blank" rel="noopener">Open on Delta ↗</a>
     </div>
