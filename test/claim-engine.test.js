@@ -137,8 +137,16 @@ test('Canada APPR cancellation: refunded ticket = fixed CAD 400 / 125 (s.19(2));
   const e = refunded.entitlements.find((x) => /APPR/.test(x.title));
   assert.match(e.condition, /14 days or less/);
   assert.match(e.rule, /s\.12 & s\.19/);
-  const flew = CE.assess({ type: 'cancelled', traveled: 'yes', region: 'canada', incidentDate: '2026-06-01' });
-  assert.match(amountOf(flew, 'APPR'), /CAD 400 \/ 700 \/ 1,000 \(large airlines; small airlines CAD 125 \/ 250 \/ 500\)/);
+  // Flying the rebooking pays by how late you finally arrived — so the wizard asks, and the amount is exact.
+  assert.equal(CE.nextQuestion({ type: 'cancelled', traveled: 'yes', region: 'canada' }).id, 'arrDelay');
+  const flew = CE.assess({ type: 'cancelled', traveled: 'yes', region: 'canada', arrDelay: '6-9', incidentDate: '2026-06-01' });
+  assert.equal(amountOf(flew, 'APPR'), 'CAD 700 (CAD 250 on a small airline), in cash');
+  const short = CE.assess({ type: 'cancelled', traveled: 'yes', region: 'canada', arrDelay: '1-2', incidentDate: '2026-06-01' });
+  assert.equal(short.entitlements.filter((e) => /APPR/.test(e.title) && e.strength === 'conditional').length, 0, 'under 3 hours nothing is owed');
+  assert.match(short.entitlements.find((e) => /APPR/.test(e.title)).title, /no cash under 3 hours/);
+  const unknown = CE.assess({ type: 'cancelled', traveled: 'yes', region: 'canada', incidentDate: '2026-06-01' });
+  assert.match(amountOf(unknown, 'APPR'), /CAD 400 \/ 700 \/ 1,000 \(large airlines; small airlines CAD 125 \/ 250 \/ 500\)/);
+  assert.match(unknown.entitlements.find((e) => /APPR/.test(e.title)).condition, /3\+ hours/);
 });
 
 // ---------------------------------------------------------------- baggage
@@ -381,23 +389,38 @@ test('Canada bump: the wizard asks which way the flight left; only a U.S. depart
 
 test('A U.S. bump entitlement carries its conditions (30+ seats, on-time check-in) into the letter', () => {
   const r = CE.assess({ type: 'bumped', region: 'us', voluntary: 'no', fareOneWay: 300, arrDelay: '3-4', incidentDate: '2026-06-01' });
-  assert.match(r.entitlements.find((x) => /forced off/.test(x.title)).condition, /30\+ seats/);
+  const cond = r.entitlements.find((x) => /forced off/.test(x.title)).condition;
+  assert.match(cond, /30\+ seats/);
+  assert.match(cond, /smaller plane/, '250.6(b): a swap to a smaller aircraft takes the payment away');
   assert.match(r.letterBody, /30\+ seats/);
+  assert.match(r.letterBody, /smaller plane/);
 });
 
 // ---------------------------------------------------------------- downgrade (14 CFR 260.2(5) & 260.6)
-test('Downgrade REFUSED = strong full refund (260.2 & 260.6); downgrade FLOWN = conditional under the contract, never a federal cite', () => {
+test('Downgrade REFUSED = full refund (260.2 & 260.6); downgrade FLOWN = the fare difference, which DOT still requires', () => {
   const refused = CE.assess({ type: 'downgrade', downgradeFlew: 'no', region: 'us', payment: 'credit', incidentDate: '2026-06-01' });
   const full = refused.entitlements.find((e) => /full cash refund/i.test(e.title));
   assert.equal(full.strength, 'strong');
   assert.match(full.rule, /260\.2 & 260\.6/);
+
+  // 14 CFR 250.6(c) + DOT's Part 260 final rule (89 FR 32778): flying the lower cabin ends the FULL refund,
+  // not the fare difference. It is not a contract courtesy.
   const flew = CE.assess({ type: 'downgrade', downgradeFlew: 'yes', region: 'us', incidentDate: '2026-06-01' });
-  assert.equal(strongTitles(flew).length, 0, 'no firm federal claim once you fly the lower cabin');
   const diff = flew.entitlements.find((e) => /fare difference/i.test(e.title));
-  assert.equal(diff.strength, 'conditional');
-  assert.doesNotMatch(diff.rule, /260/);
-  assert.match(diff.condition, /contract of carriage/);
-  assert.doesNotMatch(flew.letterBody, /14 CFR Part 260/);
+  assert.equal(diff.strength, 'strong');
+  assert.match(diff.rule, /250\.6\(c\)/);
+  assert.match(diff.rule, /89 FR 32778/);
+  assert.equal(diff.condition, undefined, 'nothing left to condition it on for a U.S. flight');
+  assert.doesNotMatch(diff.rule, /contract of carriage/);
+  assert.doesNotMatch(diff.rule, /260\.2/, 'the full-refund rule is not the fare-difference rule');
+  assert.match(flew.letterBody, /250\.6\(c\)/);
+  assert.match(flew.headline, /owed/i, 'no longer reads "there may be no cash owed"');
+
+  // Outside the U.S. rule's reach it keeps the covered-flight condition instead of disappearing.
+  const eu = CE.assess({ type: 'downgrade', downgradeFlew: 'yes', region: 'from_eu', distanceBand: 'long', incidentDate: '2026-06-01' });
+  const euDiff = eu.entitlements.find((e) => /fare difference/i.test(e.title));
+  assert.equal(euDiff.strength, 'conditional');
+  assert.match(euDiff.condition, /to, from or within the United States/);
 });
 
 test('Downgrade wizard asks whether you flew, and asks how you paid only when a refund is owed', () => {
@@ -416,21 +439,24 @@ test('exactAmount accepts only a figure the text leads with — never a ceiling 
 });
 
 // ---------------------------------------------------------------- EU261 / UK261: Art. 7(2), Art. 4(3), Art. 5(1)(c)
-test('EU/UK: the airline may halve compensation when you arrived within 2/3/4h (Art. 7(2)) — full figure with the cut beside it, EU and UK alike', () => {
+test('EU/UK Art. 7(2): the possible half is shown beside the figure, never inside the amount the letter demands', () => {
+  const detailOf = (res, kw) => res.entitlements.find((e) => e.title.includes(kw)).detail;
   const euBump = CE.assess({ type: 'bumped', region: 'from_eu', voluntary: 'no', arrDelay: '1-2', distanceBand: 'long', incidentDate: '2026-06-01' });
-  assert.match(amountOf(euBump, 'EU261'), /^€600 per person, in cash \(the airline may pay €300 instead, because you arrived within 4 hours/);
+  assert.equal(amountOf(euBump, 'EU261'), '€600 per person, in cash', 'the demand is the full figure');
+  assert.match(detailOf(euBump, 'EU261'), /may pay €300 instead/);
+  assert.doesNotMatch(euBump.letterBody, /may pay/, 'the letter asks for €600 without conceding the cut');
+
   const ukBump = CE.assess({ type: 'bumped', region: 'from_uk', voluntary: 'no', arrDelay: '1-2', distanceBand: 'long', incidentDate: '2026-06-01' });
-  assert.match(amountOf(ukBump, 'UK261'), /^£520 per person, in cash \(the airline may pay £260 instead/);
-  const euDelay = CE.assess({ type: 'delayed', region: 'from_eu', arrDelay: '3-4', distanceBand: 'long', incidentDate: '2026-06-01' });
-  const ukDelay = CE.assess({ type: 'delayed', region: 'from_uk', arrDelay: '3-4', distanceBand: 'long', incidentDate: '2026-06-01' });
-  assert.match(amountOf(euDelay, 'EU261'), /^€600 .*€300 instead/, 'EU now matches the UK treatment');
-  assert.match(amountOf(ukDelay, 'UK261'), /^£520 .*£260 instead/);
+  assert.match(detailOf(ukBump, 'UK261'), /may pay £260 instead/);
+  // EU and UK now treat the same long-haul 3–4h delay the same way (Sturgeon para 63).
+  for (const [region, name, half] of [['from_eu', 'EU261', '€300'], ['from_uk', 'UK261', '£260']]) {
+    const r = CE.assess({ type: 'delayed', region, arrDelay: '3-4', distanceBand: 'long', incidentDate: '2026-06-01' });
+    assert.match(detailOf(r, name), new RegExp('may pay ' + half + ' instead'));
+  }
   for (const [band, d] of [['long', '4-6'], ['medium', '3-4'], ['short', '3-4']]) {
     const r = CE.assess({ type: 'delayed', region: 'from_eu', arrDelay: d, distanceBand: band, incidentDate: '2026-06-01' });
-    assert.doesNotMatch(amountOf(r, 'EU261'), /may pay/, `${band} ${d}: no cut`);
+    assert.doesNotMatch(detailOf(r, 'EU261'), /may pay/, `${band} ${d}: outside the Art. 7(2) window`);
   }
-  const mediumBump = CE.assess({ type: 'bumped', region: 'from_uk', voluntary: 'no', arrDelay: '3-4', distanceBand: 'medium', incidentDate: '2026-06-01' });
-  assert.doesNotMatch(amountOf(mediumBump, 'UK261'), /may pay/, 'the medium window is 3 hours');
 });
 
 test('EU/UK denied boarding has no extraordinary-circumstances defence (Art. 4(3)); only reasonable grounds (Art. 2(j))', () => {
@@ -444,21 +470,90 @@ test('EU cancellation: 14+ days’ notice means nothing is owed — not a "reduc
   const r = CE.assess({ type: 'cancelled', traveled: 'no', region: 'from_eu', distanceBand: 'long', payment: 'credit', incidentDate: '2026-06-01' });
   const e = r.entitlements.find((x) => /EU261/.test(x.title));
   assert.match(e.detail, /Nothing is owed if they told you 14\+ days before departure/);
+  assert.match(e.detail, /OFFERED you a replacement flight/, 'the exemption turns on the offer, not on taking it');
   assert.match(e.condition, /less than 14 days before departure/);
+  assert.match(e.condition, /without offering you a replacement/);
   assert.doesNotMatch(e.detail + e.condition, /reduced/i);
 });
 
-test('SCHEDULE later arrival 3–4h on a long flight carries the Art. 7(2) cut; nothing claims it is never halved', () => {
-  const r = CE.assess({ type: 'schedule', schedDelta: '3-4', schedAccepted: 'yes', region: 'from_uk', schedDirection: 'later', distanceBand: 'long', incidentDate: '2026-06-01' });
-  const e = r.entitlements.find((x) => /UK261/.test(x.title));
-  assert.match(e.amountText, /^£520 .*£260 instead/);
-  assert.doesNotMatch(e.detail, /not halved/);
+test('SCHEDULE: a later arrival can be halved; a flight brought FORWARD cannot (CJEU Azurair, C-146/20)', () => {
+  const later = CE.assess({ type: 'schedule', schedDelta: '3-4', schedAccepted: 'yes', region: 'from_uk', schedDirection: 'later', distanceBand: 'long', incidentDate: '2026-06-01' });
+  const l = later.entitlements.find((x) => /UK261/.test(x.title));
+  assert.equal(l.amountText, '£520 per person, in cash');
+  assert.match(l.detail, /may pay £260 instead/);
   const earlier = CE.assess({ type: 'schedule', schedDelta: '3-4', schedAccepted: 'no', region: 'from_eu', schedDirection: 'earlier', schedNotice: '<7', distanceBand: 'long', payment: 'credit', incidentDate: '2026-06-01' });
-  assert.doesNotMatch(earlier.entitlements.find((x) => /EU261/.test(x.title)).detail, /not halved/);
+  const e = earlier.entitlements.find((x) => /EU261/.test(x.title));
+  assert.match(e.detail, /not halved/);
+  assert.match(e.detail, /Azurair/);
+  assert.doesNotMatch(e.detail, /may pay/);
 });
 
 test('The bump figure names the fare it was computed from', () => {
   const r = CE.assess({ type: 'bumped', region: 'us', voluntary: 'no', fareOneWay: 300, arrDelay: '3-4', incidentDate: '2026-06-01' });
   assert.match(amountOf(r, 'forced off'), /^\$1,200 \(400% of the \$300 one-way fare you entered, capped at \$2,150\)/);
-  assert.match(CE.nextQuestion({ type: 'bumped', region: 'us', voluntary: 'no' }).help, /exact one-way fare/);
+  const help = CE.nextQuestion({ type: 'bumped', region: 'us', voluntary: 'no' }).help;
+  assert.match(help, /including taxes and mandatory fees/, '14 CFR 250.1 fare');
+  assert.match(help, /lowest cash fare/, 'an award ticket is not a $6 fare');
+});
+
+// ---------------------------------------------------------------- volunteers, double recovery, stale answers, cents
+test('A volunteer is never shown the fixed denied-boarding cash — not in the U.S., the EU, the UK or Canada', () => {
+  for (const [region, extra] of [['us', {}], ['from_eu', { distanceBand: 'long' }], ['from_uk', { distanceBand: 'short' }], ['canada', {}]]) {
+    const r = CE.assess({ type: 'bumped', voluntary: 'yes', region, ...extra, incidentDate: '2026-06-01' });
+    assert.equal(strongTitles(r).length, 0, region);
+    assert.ok(!r.entitlements.some((e) => /APPR|EU261|UK261/.test(e.title)), region + ': no involuntary-bump cash');
+    assert.doesNotMatch(r.letterBody, /€|£|CAD/, region + ': the letter demands none of it');
+    const e = r.entitlements.find((x) => /volunteered/.test(x.title));
+    assert.equal(e.strength, 'info');
+    if (region === 'from_eu') assert.match(e.rule, /EU Regulation 261\/2004, Art\. 4\(1\)/);
+    if (region === 'us') assert.match(e.rule, /250\.2b/);
+    if (region === 'canada') assert.doesNotMatch(e.rule, /250\.2b/, 'a Canadian departure is not a U.S. rule');
+  }
+});
+
+test('A U.S.-origin bump to Canada carries the no-double-recovery limit (Canada Transportation Act s.86.11(3))', () => {
+  const fromUs = CE.assess({ type: 'bumped', region: 'canada', voluntary: 'no', bumpOrigin: 'us', fareOneWay: 200, arrDelay: '3-4', incidentDate: '2026-06-01' });
+  const appr = fromUs.entitlements.find((e) => /APPR/.test(e.title));
+  assert.match(appr.condition, /s\.86\.11\(3\)/);
+  assert.match(fromUs.letterBody, /86\.11\(3\)/, 'the demand says so too');
+  const fromCanada = CE.assess({ type: 'bumped', region: 'canada', voluntary: 'no', bumpOrigin: 'canada', arrDelay: '3-4', incidentDate: '2026-06-01' });
+  assert.doesNotMatch(fromCanada.entitlements.find((e) => /APPR/.test(e.title)).condition, /86\.11/, 'nothing was paid under U.S. rules');
+});
+
+test('APPR’s control test is Canada’s own — "mechanical" never qualifies a Canadian claim', () => {
+  const r = CE.assess({ type: 'cancelled', traveled: 'yes', region: 'canada', arrDelay: '6-9', incidentDate: '2026-06-01' });
+  const e = r.entitlements.find((x) => /APPR/.test(x.title));
+  assert.doesNotMatch(e.detail, /mechanical/i);
+  assert.match(e.detail, /not required for safety/);
+});
+
+test('An answer whose question no longer applies is dropped, so a flown downgrade offers no chargeback', () => {
+  const stale = { type: 'downgrade', downgradeFlew: 'yes', region: 'us', payment: 'credit', incidentDate: '2026-06-01' };
+  assert.equal(CE.pruneAnswers(stale).payment, undefined, 'payment is only asked when a refund is owed');
+  assert.equal(CE.pruneAnswers(stale).downgradeFlew, 'yes');
+  const r = CE.assess(stale);
+  assert.doesNotMatch(r.letterBody, /Fair Credit/, 'no FCBA threat for a refund that was never due');
+  assert.ok(!r.entitlements.some((e) => /Fair Credit/.test(e.detail || '')));
+  // The evidence fields a schedule-change letter needs are not wizard answers, and survive untouched.
+  const sched = CE.pruneAnswers({ type: 'schedule', schedDelta: '3-4', schedAccepted: 'no', region: 'us', payment: 'credit', schedFrom: 'dep 05:40', flightDate: '2026-07-04', incidentDate: '2026-06-01' });
+  assert.equal(sched.schedFrom, 'dep 05:40');
+  assert.equal(sched.flightDate, '2026-07-04');
+  assert.equal(sched.payment, 'credit', 'still asked when the refund is declined');
+});
+
+test('The chargeback letter cites a refund rule only when this claim has one', () => {
+  const refund = CE.chargebackLetter({ type: 'cancelled', traveled: 'no', region: 'us', payment: 'credit', incidentDate: '2026-06-01' }, { airline: 'Delta Air Lines' });
+  assert.match(refund, /14 CFR Part 260/);
+  const flown = CE.chargebackLetter({ type: 'downgrade', downgradeFlew: 'yes', region: 'us', incidentDate: '2026-06-01' }, { airline: 'Delta Air Lines' });
+  assert.doesNotMatch(flown, /14 CFR Part 260/, 'Part 260 gives nothing here');
+  assert.match(flown, /did not provide as agreed/);
+});
+
+test('Money is stated to the cent, and the exact-amount reader accepts cents but stops at punctuation', () => {
+  const r = CE.assess({ type: 'bumped', region: 'us', voluntary: 'no', fareOneWay: 200.4, arrDelay: '1-2', incidentDate: '2026-06-01' });
+  assert.match(amountOf(r, 'forced off'), /^\$400\.80 \(200% of the \$200\.40 one-way fare you entered/);
+  assert.equal(CE.exactAmount('$400.80 (200% of the $200.40 one-way fare you entered, capped at $1,075)'), '$400.80');
+  assert.equal(CE.exactAmount('CAD 400, in cash'), 'CAD 400', 'a trailing comma is punctuation, not part of the figure');
+  assert.equal(CE.exactAmount('CAD 400 / 700 / 1,000 (large airlines)'), null);
+  assert.equal(CE.exactAmount('Your provable loss, up to $4,700 per passenger'), null);
 });

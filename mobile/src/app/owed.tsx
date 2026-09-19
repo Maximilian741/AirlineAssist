@@ -19,8 +19,10 @@ import {
   assess,
   chargebackLetter,
   fill,
+  exactAmount,
   nextQuestion,
   prefilledHistory,
+  pruneAnswers,
   smallClaimsNotice,
   type Answers,
   type ClaimResult,
@@ -112,6 +114,8 @@ export default function OwedScreen() {
 
   const q = nextQuestion(answers);
   const res: ClaimResult | null = q ? null : assess(answers);
+  // The answers that still apply: a trip pre-fills `payment`, but a flown downgrade has no refund to charge back.
+  const filed = pruneAnswers(answers);
   const airline = airlineIdx != null ? AIRLINES[airlineIdx] : null;
   // null when nothing firm is owed: then there is no share card at all.
   const shareCopy = res ? cardCopy(res, answers, { ...details, airline: shortName(String(details.airline || '')) }) : null;
@@ -269,7 +273,7 @@ export default function OwedScreen() {
                 <ActionBtn label="📧 Email the airline" theme={theme} onPress={doEmail} />
                 <ActionBtn label="🏛️ DOT complaint" theme={theme} onPress={doDot} />
                 <ActionBtn label="🖨️ Print / PDF" theme={theme} onPress={() => { tracker.track('airline').catch(() => {}); doPrint(letterFilled(), 'Demand letter'); }} />
-                {answers.payment === 'credit' ? (
+                {filed.payment === 'credit' ? (
                   <ActionBtn label="💳 Chargeback letter" theme={theme} onPress={() => { tracker.track('chargeback').catch(() => {}); doPrint(fill(chargebackLetter(answers, details), details, answers), 'Chargeback letter'); }} />
                 ) : null}
               </View>
@@ -281,7 +285,12 @@ export default function OwedScreen() {
               onEscalate={(channel) => {
                 if (channel === 'file-dot') doDot();
                 else if (channel === 'file-charge') { tracker.track('chargeback'); doPrint(fill(chargebackLetter(answers, details), details, answers), 'Chargeback letter'); }
-                else if (channel === 'esc-notice') { tracker.track('smallclaims'); doPrint(fill(smallClaimsNotice(answers, details, { amount: tracker.claim?.amount || '' }), details, answers), 'Final notice before small claims'); }
+                else if (channel === 'esc-notice') {
+                  // From the result on screen, never a figure stored by an older version (which could be a ceiling).
+                  const cash = res.entitlements.find((e) => e.strength === 'strong' && exactAmount(e.amountText));
+                  tracker.track('smallclaims');
+                  doPrint(fill(smallClaimsNotice(answers, details, { amount: (cash && exactAmount(cash.amountText)) || '' }), details, answers), 'Final notice before small claims');
+                }
                 else doEmail();
               }}
             />
@@ -387,6 +396,7 @@ function EntitlementCard({ e, theme }: { e: Entitlement; theme: ReturnType<typeo
       <ThemedText style={{ fontWeight: '800', fontSize: 15.5 }}>{e.title}</ThemedText>
       {showAmt ? <ThemedText style={{ fontWeight: '800', color: e.strength === 'strong' ? theme.good : theme.text, marginTop: 2 }}>{e.amountText}</ThemedText> : null}
       <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4, lineHeight: 20 }}>{e.detail}</ThemedText>
+      {e.condition ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4, lineHeight: 20, fontWeight: '700' }}>Only if: {e.condition}</ThemedText> : null}
       {e.rule && e.rule !== '—' ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>📜 {e.rule}</ThemedText> : null}
       {e.deadline ? <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 2 }}>⏰ {e.deadline}</ThemedText> : null}
     </ThemedView>

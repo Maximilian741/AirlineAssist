@@ -11,8 +11,8 @@ window.Viral = (function () {
     return ((res && res.entitlements) || []).find((e) => e.strength === 'strong') || null;
   }
   // A figure the entitlement LEADS with is exact ("$800 (400% of your fare…)"); a ceiling never leads.
-  const EXACT = /^\s*(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)(?![\d,]|\s*\/)/;
-  const ANY_FIGURE = /(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|[\d,]+ SDR)/;
+  const EXACT = /^\s*((?:\$|€\s?|£\s?|CAD\s?)\d+(?:,\d{3})*(?:\.\d{2})?)(?![\d.]|,\d|\s*\/)/;
+  const ANY_FIGURE = /(\$[\d,]+(?:\.\d{2})?|€\s?[\d,]+(?:\.\d{2})?|£\s?[\d,]+(?:\.\d{2})?|[\d,]+ SDR)/;
   function pickAmount(res) {
     const e = featured(res);
     const m = e ? String(e.amountText || '').match(EXACT) : null;
@@ -33,8 +33,11 @@ window.Viral = (function () {
     const al = airlineName(d);
     const rule = e.rule && e.rule !== '—' ? e.rule : 'the rule behind it';
     const title = String(e.title || '');
-    if (/lost|damaged/i.test(title)) {
-      const cap = (String(e.amountText || '').match(ANY_FIGURE) || [])[1] || '';
+    const amountText = String(e.amountText || '');
+    // A bag-liability entitlement is a CEILING on a provable loss — recognised by that text, not by words in
+    // the title, so the Montreal (international) version takes this path too.
+    if (/provable loss/i.test(amountText)) {
+      const cap = (amountText.match(ANY_FIGURE) || [])[1] || '';
       return {
         headline: `${al} has to cover my lost bag.`,
         sub: cap ? `For what I can prove was inside, up to ${cap}.` : 'For what I can prove was inside.',
@@ -44,17 +47,23 @@ window.Viral = (function () {
       };
     }
     const amount = pickAmount(res);
-    const pct = String(e.amountText || '').match(/^(\d+)% of /);
-    const phrase = amount || (pct ? `${pct[1]}% of my fare` : /full cash refund/i.test(title) ? 'a full refund' : /bag fee/i.test(title) ? 'my bag fee back' : /refund/i.test(title) ? 'a refund' : '');
+    // "400% of your one-way fare, up to $2,150" is a percentage with a ceiling: never one without the other.
+    const pct = amountText.match(/^(\d+)% of /);
+    const cap = (amountText.match(/up to (\$[\d,]+(?:\.\d{2})?)/) || [])[1] || '';
+    const named = /full cash refund/i.test(title) ? 'a full refund'
+      : /fare difference/i.test(title) ? 'the fare difference'
+        : /bag fee/i.test(title) ? 'my bag fee back'
+          : /refund/i.test(title) ? 'a refund' : '';
+    const pctPhrase = pct ? `${pct[1]}% of my fare${cap ? `, capped at ${cap}` : ''}` : '';
+    const phrase = amount || named || pctPhrase;
     return {
       headline: phrase ? `${al} owes me ${phrase}.` : `${al} owes me — here’s the rule.`,
       sub: e.condition ? `Conditions apply: ${e.condition}.` : 'Most people never ask for it.',
       panelLabel: 'THEY OWE ME',
-      big: (phrase || 'see the rule').toUpperCase(),
+      big: (amount || named || (pct ? `${pct[1]}% of my fare` : '') || 'see the rule').toUpperCase(),
       rule,
     };
   }
-
   // Captions state what the rule entitles you to. Nothing is narrated as already paid.
   // n.start begins a sentence ("Delta" / "The airline"), n.mid sits inside one ("Delta" / "the airline"),
   // n.adj qualifies a noun ("Delta " / "") so "an oversold flight" never reads "an oversold The airline flight".
@@ -68,7 +77,12 @@ window.Viral = (function () {
       (n) => `Canceled flight, and you chose not to fly? Federal rule 14 CFR Part 260 requires a refund to your original payment, not a voucher. Checking what ${n.mid} owes me. 💸`,
     ],
     schedule: [
-      (n) => `${n.start} changed my flight by hours. Under 14 CFR 260, a change that big means a full refund if you decline it — even on a nonrefundable fare. Most people just accept the new time. ✈️`,
+      (n, _amt, _cap, a) => a && a.schedDelta === 'route'
+        ? `${n.start} added a connection (or moved my airport) after I booked. Under 14 CFR 260 that’s a significant change — a full refund if you decline it, even on a nonrefundable fare. Most people just accept the new itinerary. ✈️`
+        : `${n.start} changed my flight by hours. Under 14 CFR 260, a change that big means a full refund if you decline it — even on a nonrefundable fare. Most people just accept the new time. ✈️`,
+    ],
+    downgrade_flew: [
+      (n) => `Downgraded to a cheaper cabin and flew it anyway? DOT still requires the airline to refund the fare difference — most people never ask. Asking ${n.mid} for mine. ✈️`,
     ],
     bag_late: [
       (n) => `If your checked bag shows up late and you filed a report, the bag fee is refundable under federal rules. Asking ${n.mid} for mine — most people never do. 🧳`,
@@ -86,7 +100,8 @@ window.Viral = (function () {
   // The hook follows the featured entitlement, not just the incident type (a missing bag can surface as a lost-bag claim).
   function hookKey(e, a) {
     const t = String(e.title || '');
-    if (/lost|damaged/i.test(t)) return 'bag_lost';
+    if (/provable loss/i.test(String(e.amountText || ''))) return 'bag_lost';
+    if (/fare difference/i.test(t)) return 'downgrade_flew';
     if (/bag fee/i.test(t)) return 'bag_late';
     if (/forced off/i.test(t)) return 'bumped';
     if (/unused service/i.test(t)) return 'extra';
@@ -102,7 +117,7 @@ window.Viral = (function () {
     const amt = pickAmount(res);
     const cap = (String(e.amountText || '').match(ANY_FIGURE) || [])[1] || '';
     const list = HOOKS[hookKey(e, a)] || [(x) => `Turns out there's a rule for this. Checking what ${x.mid} owes me — took about 2 minutes. 👇`];
-    const hook = list[(variant || 0) % list.length](n, amt, cap);
+    const hook = list[(variant || 0) % list.length](n, amt, cap, a);
     const slug = named ? '#' + al.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + 'tok' : null;
     const tags = ['#airlinetok', '#traveltok', '#consumerrights', '#knowyourrights', '#passengerrights', '#travelhack', '#fyp', '#foryou', slug]
       .filter(Boolean)

@@ -29,7 +29,6 @@ const NOTHING_FIRM = {
   'bag back within 12 hours': { type: 'bag_late', bagHours: 'lt12', reportFiled: 'yes', region: 'us' },
   'U.S. delay': { type: 'delayed', arrDelay: '4-6', region: 'us' },
   'EU delay (conditional cash only)': { type: 'delayed', arrDelay: '4-6', region: 'from_eu', distanceBand: 'long' },
-  'flew the downgrade': { type: 'downgrade', downgradeFlew: 'yes', region: 'us' },
 };
 
 test('nothing firm owed -> no share card and no caption, on web and mobile alike', () => {
@@ -54,6 +53,9 @@ const FIRM = {
   'late bag with report': { type: 'bag_late', bagHours: '15-30', reportFiled: 'yes', region: 'us' },
   'declined schedule change': { type: 'schedule', schedDelta: '3-4', schedAccepted: 'no', region: 'us' },
   'refused downgrade': { type: 'downgrade', downgradeFlew: 'no', region: 'us' },
+  'flew the downgrade (fare difference)': { type: 'downgrade', downgradeFlew: 'yes', region: 'us' },
+  'route change declined': { type: 'schedule', schedDelta: 'route', schedAccepted: 'no', region: 'us' },
+  'bag still missing, no report': { type: 'bag_late', bagHours: 'missing', reportFiled: 'no', region: 'intl_from_us' },
   'unused extra': { type: 'extra' },
 };
 
@@ -71,14 +73,40 @@ test('firm claims produce identical card copy and captions on both platforms', (
 test('the exact bump amount is shown; a ceiling is never presented as what they owe', () => {
   const paid = { ...base, ...FIRM['bumped with a fare'] };
   assert.equal(webViral.cardCopy(webCE.assess(paid), paid, D).big, '$1,200');
+
+  // With no fare entered there is no dollar figure — so the percentage keeps its cap, and the cap is never
+  // presented as the amount owed.
   const noFare = { ...base, ...FIRM['bumped, no fare entered'] };
   const c = webViral.cardCopy(webCE.assess(noFare), noFare, D);
-  assert.doesNotMatch(c.headline + c.big, /2,150/, 'the $2,150 cap is not what they owe');
-  const lost = { ...base, ...FIRM['lost bag (U.S.)'] };
-  const lc = webViral.cardCopy(webCE.assess(lost), lost, D);
-  assert.equal(lc.panelLabel, 'COVERED UP TO');
-  assert.doesNotMatch(lc.headline, /owes me \$/, 'no "owes me $4,700"');
-  assert.match(lc.sub, /up to \$4,700/);
+  assert.match(c.headline, /owes me 400% of my fare, capped at \$2,150/);
+  assert.doesNotMatch(c.headline, /owes me \$2,150|owes me up to/);
+  assert.equal(c.big, '400% OF MY FARE');
+
+  // A bag liability is a ceiling on a provable loss, in either regime — never "owes me".
+  for (const [name, figure] of [['lost bag (U.S.)', '$4,700'], ['lost bag (international)', '1,519 SDR'], ['bag still missing, no report', '1,519 SDR']]) {
+    const a = { ...base, ...FIRM[name] };
+    const lc = webViral.cardCopy(webCE.assess(a), a, D);
+    assert.equal(lc.panelLabel, 'COVERED UP TO', name);
+    assert.equal(lc.big, figure, name);
+    assert.doesNotMatch(lc.headline, /owes me/, name);
+    assert.match(lc.sub, /up to/, name);
+    assert.match(webViral.caption(webCE.assess(a), a, D, 0), /loses your bag/, name + ': the lost-bag hook');
+  }
+
+  // A refund reads as a refund, not as "100% of my fare".
+  for (const name of ['refused cancellation', 'declined schedule change', 'refused downgrade']) {
+    const a = { ...base, ...FIRM[name] };
+    assert.match(webViral.cardCopy(webCE.assess(a), a, D).headline, /owes me a full refund/, name);
+  }
+  const flew = { ...base, ...FIRM['flew the downgrade (fare difference)'] };
+  assert.match(webViral.cardCopy(webCE.assess(flew), flew, D).headline, /owes me the fare difference/);
+  assert.match(webViral.caption(webCE.assess(flew), flew, D, 0), /flew it anyway/);
+
+  // A route change is not "changed my flight by hours".
+  const route = { ...base, ...FIRM['route change declined'] };
+  const cap = webViral.caption(webCE.assess(route), route, D, 0);
+  assert.match(cap, /added a connection/);
+  assert.doesNotMatch(cap, /by hours/);
 });
 
 test('no caption or card anywhere narrates money already received, invents a voucher, or leans on "by law"', () => {

@@ -850,6 +850,9 @@ function claimBack() {
 
 function renderClaimResult() {
   const res = ClaimEngine.assess(state.claim.answers);
+  // Answers whose question no longer applies (a trip's pre-filled `payment` after "I flew the downgrade")
+  // must not drive the filing buttons either — the engine prunes them, so the UI reads the same set.
+  const answers = ClaimEngine.pruneAnswers(state.claim.answers);
   const ents = res.entitlements.map((e) => {
     const amt = e.amountText && e.amountText !== '—' && e.amountText !== '';
     const ruleBit = e.rule && e.rule !== '—'
@@ -860,6 +863,7 @@ function renderClaimResult() {
         ${amt ? `<span class="claim-amt">${esc(e.amountText)}</span>` : ''}
       </div>
       ${e.detail ? `<p class="claim-detail">${esc(e.detail)}</p>` : ''}
+      ${e.condition ? `<p class="claim-detail"><b>Only if:</b> ${esc(e.condition)}</p>` : ''}
       ${ruleBit || e.deadline ? `<div class="claim-meta">${ruleBit}${e.deadline ? `<span> ${esc(e.deadline)}</span>` : ''}</div>` : ''}
     </div>`;
   }).join('');
@@ -870,16 +874,16 @@ function renderClaimResult() {
       <div class="claim-doc">
         <div class="claim-doc-head"><h3> Your demand letter</h3><button class="ghost sm" data-copy="claim-letter">Copy</button></div>
         <p class="hint">Anything still in [BRACKETS] fills in as you enter your details below.</p>
-        <pre class="claim-pre" id="claim-letter">${esc(ClaimEngine.fill(res.letterBody, state.claim.details || {}, state.claim.answers))}</pre>
+        <pre class="claim-pre" id="claim-letter">${esc(ClaimEngine.fill(res.letterBody, state.claim.details || {}, answers))}</pre>
       </div>
       <div class="claim-doc">
         <div class="claim-doc-head"><h3> DOT complaint text</h3><button class="ghost sm" data-copy="claim-dot">Copy</button></div>
-        <pre class="claim-pre" id="claim-dot">${esc(ClaimEngine.fill(res.dotText, state.claim.details || {}, state.claim.answers))}</pre>
+        <pre class="claim-pre" id="claim-dot">${esc(ClaimEngine.fill(res.dotText, state.claim.details || {}, answers))}</pre>
         <a class="rights-btn" href="https://www.transportation.gov/airconsumer/file-consumer-complaint" target="_blank" rel="noopener">Open the DOT complaint form ↗</a>
       </div>
-      ${fileSectionHtml(state.claim.answers)}
+      ${fileSectionHtml(answers)}
       <div id="claim-tracker"></div>
-      ${escalationHtml(res, state.claim.answers)}
+      ${escalationHtml(res, answers)}
       ${viralSectionHtml(res)}
       <p class="hint claim-disclaim"> ${esc(res.disclaimer)}</p>
       <div class="claim-nav">${state.claim.history.length ? '<button class="ghost" id="claim-change">← Change an answer</button>' : ''}
@@ -897,9 +901,9 @@ function renderClaimResult() {
   $('#claim-restart').addEventListener('click', startClaim);
   const change = $('#claim-change');
   if (change) change.addEventListener('click', claimBack);
-  wireFileSection(res, state.claim.answers);
-  wireEscalation(res, state.claim.answers);
-  wireViralSection(res, state.claim.answers);
+  wireFileSection(res, answers);
+  wireEscalation(res, answers);
+  wireViralSection(res, answers);
   renderClaimTracker();
 }
 

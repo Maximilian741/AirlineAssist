@@ -89,7 +89,11 @@ const URL = {
   dot: 'https://www.transportation.gov/airconsumer/file-consumer-complaint',
 };
 
-const usd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+// Cents only when there are cents: 200% of a $200.40 fare is $400.80, not $401.
+const usd = (n: number) => {
+  const c = Math.round(n * 100) / 100;
+  return '$' + c.toLocaleString('en-US', Number.isInteger(c) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 const REGION_OPTS = [
   { value: 'us', label: 'Within the United States' },
@@ -146,7 +150,7 @@ const FLOW: FlowStep[] = [
     when: (a) => a.type === 'downgrade',
     q: {
       title: 'Did you fly the lower cabin?',
-      help: 'If you refused the downgraded flight, U.S. rules give you a full refund. If you flew it, the fare difference depends on your airline’s contract.',
+      help: 'If you refused the downgraded flight, U.S. rules give you a full refund. If you flew it, you’re still owed the fare difference.',
       kind: 'choice',
       options: [
         { value: 'no', label: 'No — I refused the downgraded flight' },
@@ -238,8 +242,8 @@ const FLOW: FlowStep[] = [
       ],
     },
   },
-  { id: 'fareOneWay', when: (a) => a.type === 'bumped' && a.voluntary === 'no' && bumpFromUs(a), q: { title: 'What did your one-way ticket cost?', help: 'The exact one-way fare from your receipt or confirmation. The payment is a multiple of it, so a guess changes what you ask for.', kind: 'money' } },
-  { id: 'arrDelay', when: (a) => a.type === 'delayed' || (a.type === 'bumped' && a.voluntary === 'no'), q: { title: 'How late did you reach your destination?', kind: 'choice', options: DELAY_OPTS } },
+  { id: 'fareOneWay', when: (a) => a.type === 'bumped' && a.voluntary === 'no' && bumpFromUs(a), q: { title: 'What did your one-way ticket cost?', help: 'What you paid for this flight one way, including taxes and mandatory fees — that is the “fare” the rule multiplies (14 CFR 250.1). Booked with miles? Enter the lowest cash fare for the same cabin on that flight.', kind: 'money' } },
+  { id: 'arrDelay', when: (a) => a.type === 'delayed' || (a.type === 'bumped' && a.voluntary === 'no') || (a.type === 'cancelled' && a.traveled === 'yes' && a.region === 'canada'), q: { title: 'How late did you reach your destination?', kind: 'choice', options: DELAY_OPTS } },
   {
     id: 'distanceBand',
     when: (a) => (a.region === 'from_eu' || a.region === 'from_uk') && ['cancelled', 'delayed', 'bumped', 'downgrade', 'schedule'].includes(a.type as string),
@@ -301,7 +305,7 @@ const FLOW: FlowStep[] = [
 /** A figure you can demand: only one the entitlement text LEADS with. Exact amounts always lead
  *  ("$800 (400% of your one-way fare…)"); ceilings and ranges never do ("Your provable loss, up to $4,700"). */
 export function exactAmount(text?: string | null): string | null {
-  const m = String(text || '').match(/^\s*(\$[\d,]+|€\s?[\d,]+|£\s?[\d,]+|CAD\s?[\d,]+)(?![\d,]|\s*\/)/);
+  const m = String(text || '').match(/^\s*((?:\$|€\s?|£\s?|CAD\s?)\d+(?:,\d{3})*(?:\.\d{2})?)(?![\d.]|,\d|\s*\/)/);
   return m ? m[1].replace(/\s+/g, ' ').trim() : null;
 }
 
@@ -321,22 +325,27 @@ export function nextQuestion(answers: Answers): Question | null {
 
 const euAmount = (band?: string) => (band === 'long' ? 600 : band === 'medium' ? 400 : 250);
 const ukAmount = (band?: string) => (band === 'long' ? 520 : band === 'medium' ? 350 : 220);
-// Art. 7(2): the airline MAY halve EU/UK compensation when you reach your destination no more than 2h (short),
-// 3h (medium) or 4h (long) after the original arrival. For a plain delay the 3-hour floor leaves only long-haul
-// 3–4h (Sturgeon C-402/07 para 63). The full figure stays the demand; the possible cut is shown beside it.
+// Art. 7(2) lets the airline halve EU/UK compensation when the replacement gets you there within 2h (short),
+// 3h (medium) or 4h (long) of the original arrival. It is the airline's option, so it never belongs in the
+// figure the letter demands — only beside it. For a plain delay the 3-hour floor leaves only long-haul 3–4h
+// (Sturgeon C-402/07), and a flight brought FORWARD cannot be halved at all (CJEU Azurair, C-146/20).
 const HALVABLE: Record<string, string[]> = { short: ['<1', '1-2'], medium: ['<1', '1-2', '2-3'], long: ['<1', '1-2', '2-3', '3-4'] };
 const HALF_HOURS: Record<string, number> = { short: 2, medium: 3, long: 4 };
-function euUkAmountText(eu: boolean, band: string, arrived?: string): string {
-  const full = eu ? euAmount(band) : ukAmount(band);
-  const cur = eu ? '€' : '£';
-  const text = cur + full + ' per person, in cash';
+const euUkFull = (eu: boolean, band: string) => (eu ? euAmount(band) : ukAmount(band));
+const euUkAmountText = (eu: boolean, band: string) => (eu ? '€' : '£') + euUkFull(eu, band) + ' per person, in cash';
+const euUkHalf = (eu: boolean, band: string) => (eu ? '€' : '£') + euUkFull(eu, band) / 2;
+function halvedIfArrived(eu: boolean, band: string, arrived?: string): string {
   return (HALVABLE[band] || []).includes(arrived as string)
-    ? text + ` (the airline may pay ${cur}${full / 2} instead, because you arrived within ${HALF_HOURS[band]} hours of your original time — Art. 7(2))`
-    : text;
+    ? ` Because you reached your destination within ${HALF_HOURS[band]} hours of your original arrival time, the airline may pay ${euUkHalf(eu, band)} instead (Art. 7(2)).`
+    : '';
 }
-function halvingNote(eu: boolean, band: string): string {
-  const full = eu ? euAmount(band) : ukAmount(band);
-  return ` If the flight you ended up on arrived no more than ${HALF_HOURS[band]} hours after your original arrival time, the airline may pay half (${eu ? '€' : '£'}${full / 2}) — Art. 7(2).`;
+function halvedIfFlown(eu: boolean, band: string, delta?: string): string {
+  return (HALVABLE[band] || []).includes(delta as string)
+    ? ` If you fly it and land no more than ${HALF_HOURS[band]} hours later than originally scheduled, the airline may pay ${euUkHalf(eu, band)} instead (Art. 7(2)).`
+    : '';
+}
+function halvedIfOffered(eu: boolean, band: string): string {
+  return ` If the replacement they offered lands later than your original arrival time, but by no more than ${HALF_HOURS[band]} hours, the airline may pay ${euUkHalf(eu, band)} instead (Art. 7(2)).`;
 }
 const apprAmount = (delay?: string) => (delay === '9+' ? 1000 : delay === '6-9' ? 700 : 400);
 const apprDeniedBoarding = (d?: string) => (d === '9+' ? 2400 : d === '6-9' ? 1800 : d ? 900 : null);
@@ -351,13 +360,26 @@ function bumpResult(region: Region | undefined, band: string | undefined, fare: 
   const intl = region !== 'us';
   const tier400 = intl ? ['4-6', '6-9', '9+'] : ['2-3', '3-4', '4-6', '6-9', '9+'];
   const tier200 = intl ? ['1-2', '2-3', '3-4'] : ['1-2'];
+  const f = Math.round((Number(fare) || 0) * 100) / 100; // the fare shown and the fare multiplied are one number
   if (band === '<1') return { pct: 0, amt: 0, cap: 0 };
-  if (tier200.includes(band as string)) return { pct: 200, amt: fare ? Math.min(2 * fare, DB_CAP_200) : null, cap: DB_CAP_200 };
-  if (tier400.includes(band as string)) return { pct: 400, amt: fare ? Math.min(4 * fare, DB_CAP_400) : null, cap: DB_CAP_400 };
+  if (tier200.includes(band as string)) return { pct: 200, amt: f ? Math.min(2 * f, DB_CAP_200) : null, cap: DB_CAP_200 };
+  if (tier400.includes(band as string)) return { pct: 400, amt: f ? Math.min(4 * f, DB_CAP_400) : null, cap: DB_CAP_400 };
   return { pct: 0, amt: 0, cap: 0 };
 }
 
-export function assess(a: Answers): ClaimResult {
+/** Answers whose question no longer applies are stale — a saved trip pre-fills `payment`, then the traveler
+ *  says they flew the downgrade, and nothing should still offer a chargeback for a refund that isn't owed.
+ *  Every non-wizard field (the schedule-change evidence, the flight date) is kept untouched. */
+export function pruneAnswers(answers: Answers): Answers {
+  const a = answers || {};
+  const kept: Answers = {};
+  for (const k in a) if (!FLOW.some((s) => s.id === k)) kept[k] = a[k];
+  for (const step of FLOW) if (step.when(kept) && a[step.id] !== undefined) kept[step.id] = a[step.id];
+  return kept;
+}
+
+export function assess(answers: Answers): ClaimResult {
+  const a = pruneAnswers(answers);
   const E: Entitlement[] = [];
   const region = a.region;
   const refundDeadline = a.payment === 'other' ? 'within 20 calendar days of your request' : 'within 7 business days of your request';
@@ -444,13 +466,18 @@ export function assess(a: Answers): ClaimResult {
 
   if (a.type === 'bumped') {
     if (a.voluntary === 'yes') {
+      // A volunteer bargains; the fixed cash (U.S. 250.5, EU/UK Art. 7, APPR s.20) is for passengers refused
+      // boarding AGAINST their will, so none of those entitlements belong here.
+      const eu = region === 'from_eu', uk = region === 'from_uk', ca = region === 'canada';
       E.push({
         strength: 'info',
         title: 'You volunteered — it’s a negotiation, no legal minimum',
         amountText: 'Whatever you agreed to',
-        detail: 'Voluntary bumps have no set amount. Next time, haggle: ask the cash value, an expiry-free voucher, plus meals and a hotel for overnight delays.',
-        rule: '14 CFR 250.2b',
-        ruleUrl: URL.bump,
+        detail: 'Voluntary bumps have no set amount. Next time, haggle: ask the cash value, an expiry-free voucher, plus meals and a hotel for overnight delays.'
+          + (eu || uk ? ' The fixed ' + (eu ? '€250–€600' : '£220–£520') + ' is only for passengers refused boarding against their will — but you keep the choice of a refund or re-routing (Art. 8).' : '')
+          + (ca ? ' APPR’s CAD 900–2,400 is likewise only for passengers denied boarding involuntarily.' : ''),
+        rule: eu ? 'EU Regulation 261/2004, Art. 4(1)' : uk ? 'UK261 (retained EC 261/2004), Art. 4(1)' : ca ? 'Canada Air Passenger Protection Regulations' : '14 CFR 250.2b',
+        ruleUrl: eu ? URL.eu261 : uk ? URL.uk261 : ca ? URL.appr : URL.bump,
         deadline: '',
       });
     } else if (bumpFromUs(a)) {
@@ -471,7 +498,7 @@ export function assess(a: Answers): ClaimResult {
           title: 'Cash for being forced off an oversold flight',
           amountText: r.amt != null ? usd(r.amt) + ` (${r.pct}% of the ${usd(Number(a.fareOneWay))} one-way fare you entered, capped at ${usd(r.cap)})` : `${r.pct}% of your one-way fare, up to ${usd(r.cap)}`,
           detail: 'This is the ' + r.pct + '% tier. They must pay in CASH or a check — you do not have to accept a voucher. Insist on the check at the gate.',
-          condition: 'on an aircraft with 30+ seats, if you checked in and reached the gate on time',
+          condition: 'on a scheduled flight with 30+ seats, if you checked in and reached the gate on time — and not if you were left off because the airline swapped in a smaller plane for operational or safety reasons, or for weight and balance limits on a plane of 60 or fewer seats (14 CFR 250.6)',
           rule: '14 CFR 250.5 & 250.8',
           ruleUrl: URL.bump,
           deadline: 'Paid the same day at the airport (or mailed within 24 hours).',
@@ -488,7 +515,7 @@ export function assess(a: Answers): ClaimResult {
         deadline: '',
       });
     }
-    addIntlComp(E, a, 'denied_boarding');
+    if (a.voluntary === 'no') addIntlComp(E, a, 'denied_boarding');
   }
 
   if (a.type === 'bag_late') {
@@ -539,14 +566,18 @@ export function assess(a: Answers): ClaimResult {
         deadline: 'They must pay ' + refundDeadline + '.',
       });
     } else {
+      // 14 CFR 250.6(c) gives "an appropriate refund" to a passenger reseated in a lower-fare section of an
+      // oversold flight, and DOT said in the Part 260 final rule (89 FR 32778) that the fare difference is
+      // owed to anyone who flies a downgraded cabin, whatever caused the downgrade.
+      const usTouching = region === 'us' || region === 'intl_from_us';
       E.push({
-        strength: 'conditional',
-        title: 'The fare difference, under your airline’s contract',
-        amountText: 'The difference between what you paid and the cabin you flew',
-        condition: 'if your airline’s contract of carriage provides it',
-        detail: 'Flying the downgraded seat ends the federal full-refund right, which applied only if you refused the flight. Some contracts still pay it — American refunds the fare difference, United a set share of the fare — so check yours in the contract decoder and ask for it in writing.',
-        rule: 'Airline contract of carriage',
-        ruleUrl: '',
+        strength: usTouching ? 'strong' : 'conditional',
+        title: 'A refund of the fare difference',
+        amountText: 'The difference between the fare you paid and the fare for the cabin you flew',
+        ...(usTouching ? {} : { condition: 'under U.S. rules only on a flight to, from or within the United States' }),
+        detail: 'Flying the lower cabin ends the full-refund right — but not the fare difference. DOT requires the airline to refund that whether the downgrade came from overbooking or something else, like an aircraft swap. Your airline’s contract may use its own formula (American refunds the difference; United pays a set share of the fare), and a contract cannot pay less than the federal rule requires.',
+        rule: '14 CFR 250.6(c) · DOT refund rule, 89 FR 32778 (2024)',
+        ruleUrl: 'https://www.law.cornell.edu/cfr/text/14/250.6',
         deadline: '',
       });
     }
@@ -625,7 +656,7 @@ function addScheduleIntl(E: Entitlement[], a: Answers) {
   const ruleUrl = eu ? URL.eu261 : URL.uk261;
   const deadline = eu ? 'Claim window varies by country (often 2–3 years).' : 'Generally up to 6 years to claim (England/Wales).';
   const extra = 'the airline cannot show extraordinary circumstances — a commercial schedule change normally is not one';
-  const push = (title: string, detail: string, condition: string, arrived?: string) => E.push({ strength: 'conditional', title, amountText: euUkAmountText(eu, band, arrived), detail, condition, rule, ruleUrl, deadline });
+  const push = (title: string, detail: string, condition: string) => E.push({ strength: 'conditional', title, amountText: euUkAmountText(eu, band), detail, condition, rule, ruleUrl, deadline });
 
   if (a.schedDelta === 'route') {
     push((eu ? 'EU261' : 'UK261') + ' cash compensation — depends on the new times',
@@ -646,8 +677,8 @@ function addScheduleIntl(E: Entitlement[], a: Answers) {
       return;
     }
     push((eu ? 'EU261' : 'UK261') + ' cash compensation — you arrive 3+ hours late',
-      'A schedule change that lands you 3+ hours later than originally scheduled is a compensable delay when you fly it (Sturgeon, C-402/07). Notice does not matter for delays.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
-      'owed only if you fly it and actually arrive 3+ hours later than the original schedule, and ' + extra, a.schedDelta);
+      'A schedule change that lands you 3+ hours later than originally scheduled is a compensable delay when you fly it (Sturgeon, C-402/07). Notice does not matter for delays.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : '') + halvedIfFlown(eu, band, a.schedDelta),
+      'owed only if you fly it and actually arrive 3+ hours later than the original schedule, and ' + extra);
     return;
   }
   if (a.schedDirection === 'earlier') {
@@ -657,7 +688,7 @@ function addScheduleIntl(E: Entitlement[], a: Answers) {
     const moreThan2h = ['2-3', '3-4', '4-6', '6+'].includes(a.schedDelta as string);
     if (!(n === '<7' ? moreThan1h : moreThan2h)) return;
     push((eu ? 'EU261' : 'UK261') + ' cash compensation — an earlier departure counts as a cancellation',
-      'Bringing your flight forward by more than an hour is a cancellation in law (CJEU Azurair, C-146/20). With ' + (n === '<7' ? 'under 7 days’ notice' : '7–13 days’ notice and a move of 2+ hours') + ', compensation is due on top of the refund or rebooking — whether or not you take the earlier flight.' + (eu ? ' Any flight leaving Europe counts, on any airline.' : '') + halvingNote(eu, band),
+      'Bringing your flight forward by more than an hour is a cancellation in law (CJEU Azurair, C-146/20). With ' + (n === '<7' ? 'under 7 days’ notice' : '7–13 days’ notice and a move of 2+ hours') + ', compensation is due on top of the refund or rebooking — whether or not you take the earlier flight, and it is not halved — Art. 7(2) does not reach a flight brought forward within its own limits (CJEU Azurair, C-146/20).' + (eu ? ' Any flight leaving Europe counts, on any airline.' : ''),
       'owed only if ' + extra);
   }
 }
@@ -679,19 +710,19 @@ function addIntlComp(E: Entitlement[], a: Answers, kind: IntlKind) {
     if (kind === 'denied_boarding') {
       // Art. 4(3): bumped against your will = compensation on the spot. The Art. 5(3) extraordinary-circumstances
       // defence is not in Art. 4; only "reasonable grounds" (Art. 2(j)) take the right away.
-      detail = 'Being refused boarding against your will is compensated on the spot (Art. 4(3)). The “extraordinary circumstances” defence airlines use for delays and cancellations does not apply to bumping.' + anyAirline;
+      detail = 'Being refused boarding against your will is compensated on the spot (Art. 4(3)). The “extraordinary circumstances” defence airlines use for delays and cancellations does not apply to bumping.' + anyAirline + halvedIfArrived(eu, b, delay);
       condition = 'owed unless they refused you on reasonable grounds — health, safety, security, or inadequate travel documents — and only if you checked in on time (Art. 2(j), 3(2))';
     } else if (kind === 'cancellation') {
-      detail = cond + anyAirline + ' Nothing is owed if they told you 14+ days before departure, or rebooked you close to your original times — with 7–13 days’ notice, leaving no more than 2h early and arriving under 4h late; with under 7 days’ notice, no more than 1h early and under 2h late (Art. 5(1)(c)).' + halvingNote(eu, b);
-      condition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security — and they told you less than 14 days before departure without rebooking you close to your original times';
+      detail = cond + anyAirline + ' Nothing is owed if they told you 14+ days before departure, or OFFERED you a replacement flight close to your original times — with 7–13 days’ notice, leaving no more than 2h early and landing under 4h late; with under 7 days’ notice, no more than 1h early and under 2h late (Art. 5(1)(c)). That offer counts even if you turned it down.' + halvedIfOffered(eu, b);
+      condition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security — and they told you less than 14 days before departure without offering you a replacement flight close to your original times';
     } else {
-      detail = cond + anyAirline;
+      detail = cond + anyAirline + halvedIfArrived(eu, b, delay);
       condition = 'owed only if the cause was within the airline’s control — not extraordinary weather, ATC strikes, or security';
     }
     E.push({
       strength: 'conditional',
       title: (eu ? 'EU261' : 'UK261') + ' cash compensation',
-      amountText: euUkAmountText(eu, b, kind === 'cancellation' ? undefined : delay),
+      amountText: euUkAmountText(eu, b),
       detail,
       condition,
       rule: eu ? 'EU Regulation 261/2004' : 'UK261 (retained EC 261/2004)',
@@ -699,39 +730,60 @@ function addIntlComp(E: Entitlement[], a: Answers, kind: IntlKind) {
       deadline: eu ? 'Claim window varies by country (often 2–3 years).' : 'Generally up to 6 years to claim (England/Wales).',
     });
   } else if (region === 'canada') {
+    // APPR's test is its own: within the airline's control AND not required for safety. The EU wording
+    // ("mechanical") would promise money Canada does not owe (s.10, s.11).
+    const ctrl = 'You qualify only if the cause was within the airline’s control AND was not required for safety — crew scheduling or overbooking, for example. Nothing is owed for a disruption required for safety, or one outside the airline’s control (weather, air traffic control, security).';
+    const small = (d?: string) => (d === '9+' ? 500 : d === '6-9' ? 250 : 125);
     let amtText: string;
     let dtl: string;
+    let extraCond = '';
     if (kind === 'denied_boarding') {
       const t = apprDeniedBoarding(delay);
       amtText = t != null ? 'CAD ' + t.toLocaleString('en-US') : 'CAD 900 / 1,800 / 2,400 (by how late you arrived)';
       dtl = 'Denied boarding pays CAD 900 (under 6h late), 1,800 (6–9h), or 2,400 (9h+).';
+      // Canada Transportation Act s.86.11(3): no APPR money for an event already compensated under another regime.
+      if (bumpFromUs(a)) extraCond = ' — and not if the airline has already paid you U.S. bumping compensation for this same bump (Canada Transportation Act s.86.11(3))';
     } else if (kind === 'cancellation') {
       if (a.traveled === 'no') {
         amtText = 'CAD 400 (large airline; CAD 125 small) — the fixed amount when your ticket is refunded';
         dtl = 'Because you took the refund rather than flying, APPR fixes compensation at CAD 400 for a large airline or CAD 125 for a small one (s.19(2)), whatever the delay would have been.';
+      } else if (delay && !delayAtLeast3(delay)) {
+        E.push({
+          strength: 'info',
+          title: 'Canada APPR: no cash under 3 hours late',
+          amountText: '—',
+          detail: 'APPR pays for a cancellation only when you reach your destination 3+ hours after the arrival time on your original ticket (s.19(1)). The rebooking and care duties still apply.',
+          rule: 'Canada APPR s.19',
+          ruleUrl: URL.appr,
+          deadline: '',
+        });
+        return;
+      } else if (delay) {
+        amtText = 'CAD ' + apprAmount(delay).toLocaleString('en-US') + ' (CAD ' + small(delay) + ' on a small airline)';
+        dtl = 'The amount goes by how late you finally arrived: CAD 400 (3–6h), 700 (6–9h) or 1,000 (9h+) on a large airline; 125 / 250 / 500 on a small one (s.19(1)).';
       } else {
         amtText = 'CAD 400 / 700 / 1,000 (large airlines; small airlines CAD 125 / 250 / 500), by how late you ultimately arrived';
-        dtl = 'Compensation depends on how late you finally arrived: CAD 400 (3–6h), 700 (6–9h) or 1,000 (9h+) on a large airline; 125 / 250 / 500 on a small one (s.19(1)).';
+        dtl = 'The amount goes by how late you finally arrived: CAD 400 (3–6h), 700 (6–9h) or 1,000 (9h+) on a large airline; 125 / 250 / 500 on a small one (s.19(1)).';
+        extraCond = ' AND you finally arrived 3+ hours after the time on your original ticket (s.19(1))';
       }
     } else {
-      amtText = 'CAD ' + apprAmount(delay).toLocaleString('en-US');
-      dtl = 'Large airlines pay CAD 400 (3–6h), 700 (6–9h), 1,000 (9h+).';
+      amtText = 'CAD ' + apprAmount(delay).toLocaleString('en-US') + ' (CAD ' + small(delay) + ' on a small airline)';
+      dtl = 'Large airlines pay CAD 400 (3–6h), 700 (6–9h), 1,000 (9h+); small airlines 125 / 250 / 500.';
     }
     E.push({
       strength: 'conditional',
       title: 'Canada APPR cash compensation',
       amountText: amtText + ', in cash',
-      detail: cond + ' ' + dtl,
-      condition: kind === 'cancellation'
+      detail: ctrl + ' ' + dtl,
+      condition: (kind === 'cancellation'
         ? 'owed only if you were told 14 days or less before departure and the cause was within the airline’s control — not safety-required or outside its control'
-        : 'owed only if the cause was within the airline’s control — not safety-required or outside its control',
+        : 'owed only if the cause was within the airline’s control — not safety-required or outside its control') + extraCond,
       rule: kind === 'cancellation' ? 'Canada APPR s.12 & s.19' : 'Canada Air Passenger Protection Regulations',
       ruleUrl: URL.appr,
       deadline: 'File within 1 year of the disruption.',
     });
   }
 }
-
 function addAmenities(E: Entitlement[]) {
   E.push({
     strength: 'conditional',
@@ -918,6 +970,11 @@ export function fill(text: string, d: Details, a: Answers): string {
 }
 
 export function chargebackLetter(a: Answers, d: Details): string {
+  // Name a refund rule only when these facts actually produce one.
+  const refund = assess(a).entitlements.find((e) => e.strength === 'strong' && /260/.test(e.rule || ''));
+  const owed = refund
+    ? ` The airline owes me ${refund.title.replace(/^A\s+/i, 'a ').toLowerCase()} under ${refund.rule} and has not paid it.`
+    : ' The airline has not made me whole for a service it did not provide as agreed.';
   return [
     'To: [CARD ISSUER] — Billing Inquiries Department',
     'Re: Billing-error dispute under the Fair Credit Billing Act (15 U.S.C. § 1666)',
@@ -928,7 +985,7 @@ export function chargebackLetter(a: Answers, d: Details): string {
     '',
     'To whom it may concern,',
     '',
-    `I am disputing a charge for airline services not provided as agreed. On ${a.incidentDate || '[DATE]'}, on ${d.airline || '[AIRLINE]'} flight ${d.flightNo || '[FLIGHT #]'} (${d.origin || '[ORIGIN]'}→${d.dest || '[DESTINATION]'}, confirmation ${d.confirmation || '[CONFIRMATION #]'}), ${incidentSentence(a)} The airline owes me a refund under U.S. DOT rules (14 CFR Part 260) and has not paid it.`,
+    `I am disputing a charge for airline services not provided as agreed. On ${a.incidentDate || '[DATE]'}, on ${d.airline || '[AIRLINE]'} flight ${d.flightNo || '[FLIGHT #]'} (${d.origin || '[ORIGIN]'}→${d.dest || '[DESTINATION]'}, confirmation ${d.confirmation || '[CONFIRMATION #]'}), ${incidentSentence(a)}${owed}`,
     '',
     'This is a billing error for services not delivered as agreed. Under the Fair Credit Billing Act I am exercising my right to dispute it. Please withhold payment on the disputed amount pending investigation and credit my account. I am sending this within 60 days of the statement showing the charge.',
     '',
